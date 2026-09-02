@@ -44,7 +44,7 @@ namespace {
         if (!windowHandle) {
 
             windowHandle =
-                FindWindowA(nullptr, "VitruGen Ver0.0.4");
+                FindWindowA(nullptr, "NDMSM Sytem Ver0.0.0");
         }
 
         if (!windowHandle) {
@@ -153,7 +153,7 @@ EuclidEngine::~EuclidEngine() {
 
 bool EuclidEngine::init(int argc, char** argv) {
     std::printf("Anaheim Systems Dynamics\n");
-    std::printf("NDMSM baseline starting...\n");
+    std::printf("NDMSM System starting...\n");
     std::printf("Diagnostic + GRID_2D/GRID_3D transition host only.\n\n");
 
     s_instance = this;
@@ -179,7 +179,13 @@ void EuclidEngine::initGL(int* argc, char** argv) {
     glutInit(argc, argv);
     glutInitDisplayMode(GLUT_RGB | GLUT_DEPTH | GLUT_DOUBLE);
     glutInitWindowSize(kWidth, kHeight);
-    glutCreateWindow("NDMSM Baseline Ver0.0.0");
+    glutCreateWindow("NDMSM Sytem Ver0.0.0");
+
+#ifdef _WIN32
+
+    applyVitruGenIconFromFile("anaheim.ico");
+
+#endif
 
     glewExperimental = GL_TRUE;
     const GLenum glewResult = glewInit();

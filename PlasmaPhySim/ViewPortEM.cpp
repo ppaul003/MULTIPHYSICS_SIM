@@ -134,17 +134,88 @@ void ViewPort::drawPanelBackground() {
 
 void ViewPort::drawHeader(const WorkspacePresentation& p) {
     const float x = panelX(95.0f);
-    glColor4f(1.0f, 1.0f, 1.0f, m_panelSlide);
 
-    drawText2D(x, 100.0f, "ANAHEIM SYSTEMS DYNAMICS", GLUT_BITMAP_HELVETICA_18);
-    drawText2D(x, 128.0f, "NDMSM BASELINE Ver 0.0.0", GLUT_BITMAP_HELVETICA_18);
+    glColor4f(
+        1.0f,
+        1.0f,
+        1.0f,
+        m_panelSlide
+    );
 
-    if (!p.workspaceName.empty())
-        drawText2D(x, 180.0f, p.workspaceName.c_str(), GLUT_BITMAP_HELVETICA_18);
+    drawText2D(
+        x,
+        100.0f,
+        "ANAHEIM SYSTEMS DYNAMICS",
+        GLUT_BITMAP_HELVETICA_18
+    );
 
+    drawText2D(
+        x,
+        128.0f,
+        "Neural-Net Drive Multiphysics Modeling & Simulation",
+        GLUT_BITMAP_HELVETICA_18
+    );
+
+    drawText2D(
+        x,
+        156.0f,
+        "System Software Ver 0.0.0",
+        GLUT_BITMAP_HELVETICA_18
+    );
+
+    // ----------------------------------------
+    // Workspace / Layer information
+    // ----------------------------------------
+    if (!p.workspaceName.empty()) {
+        glColor4f(
+            0.82f,
+            0.86f,
+            0.90f,
+            m_panelSlide
+        );
+
+        drawText2D(
+            x,
+            190.0f,
+            p.workspaceName.c_str(),
+            GLUT_BITMAP_HELVETICA_18
+        );
+    }
+
+    // ----------------------------------------
+    // Divider
+    // ----------------------------------------
+    glColor4f(
+        0.55f,
+        0.60f,
+        0.65f,
+        0.65f * m_panelSlide
+    );
+
+    glLineWidth(1.0f);
+
+    glBegin(GL_LINES);
+    glVertex2f(x, 210.0f);
+    glVertex2f(panelX(505.0f), 210.0f);
+    glEnd();
+
+    // ----------------------------------------
+    // Optional layer label
+    // ----------------------------------------
     if (!p.layerLabel.empty()) {
-        glColor4f(0.72f, 0.78f, 0.82f, m_panelSlide);
-        drawText2D(x, 215.0f, p.layerLabel.c_str(), GLUT_BITMAP_HELVETICA_18);
+        glColor4f(
+            0.72f,
+            0.78f,
+            0.82f,
+            m_panelSlide
+        );
+
+        drawText2D(
+            x,
+            232.0f,
+            p.layerLabel.c_str(),
+            GLUT_BITMAP_HELVETICA_18
+        );
     }
 }
 
@@ -211,13 +282,49 @@ void ViewPort::drawSections(const WorkspacePresentation& p) {
 
 void ViewPort::drawFooter(const WorkspacePresentation& p) {
     const float x = panelX(95.0f);
-    const float y = static_cast<float>(m_windowHeight) - 135.0f;
 
-    glColor4f(0.75f, 0.75f, 0.75f, m_panelSlide);
-    if (!p.footerLine1.empty())
-        drawText2D(x, y, p.footerLine1.c_str(), GLUT_BITMAP_HELVETICA_12);
-    if (!p.footerLine2.empty())
-        drawText2D(x, y + 34.0f, p.footerLine2.c_str(), GLUT_BITMAP_HELVETICA_12);
+    // ----------------------------------------
+    // Divider
+    // ----------------------------------------
+    glColor4f(
+        0.45f,
+        0.50f,
+        0.55f,
+        0.55f * m_panelSlide
+    );
+
+    glBegin(GL_LINES);
+    glVertex2f(x, 790.0f);
+    glVertex2f(panelX(505.0f), 790.0f);
+    glEnd();
+
+    // ----------------------------------------
+    // Existing footer controls
+    // ----------------------------------------
+    if (!p.footerLine1.empty()) {
+        glColor4f(
+            0.70f,
+            0.72f,
+            0.75f,
+            m_panelSlide
+        );
+
+        drawText2D(
+            x,
+            820.0f,
+            p.footerLine1.c_str(),
+            GLUT_BITMAP_HELVETICA_12
+        );
+    }
+
+    if (!p.footerLine2.empty()) {
+        drawText2D(
+            x,
+            850.0f,
+            p.footerLine2.c_str(),
+            GLUT_BITMAP_HELVETICA_12
+        );
+    }
 }
 
 void ViewPort::drawOverlay(const WorkspacePresentation& p) {

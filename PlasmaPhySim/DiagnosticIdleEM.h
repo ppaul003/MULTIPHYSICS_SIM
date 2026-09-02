@@ -60,7 +60,9 @@ private:
     };
 
     const char* selectedEnvironmentName() const;
+    const char* selectedUnitMeasurementName() const;
     void cycleEnvironment(int direction);
+    void cycleUnitMeasurement(int direction);
     void moveGlobalShellCursor(int direction);
     void adjustGlobalShellValue(int direction);
 

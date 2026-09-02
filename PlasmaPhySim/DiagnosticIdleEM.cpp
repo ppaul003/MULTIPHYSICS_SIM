@@ -246,6 +246,9 @@ bool DiagnosticIdle::handleInput(
                 return true;
             if (m_arbiter->getWorkspaceDomain() == TheArbiter::WorkspaceDomain::NONE)
                 return true;
+            if (m_arbiter->getUnitMeasurement() ==
+                TheArbiter::UnitMeasurement::IMPERIAL)
+                return true;
             if (m_arbiter->getWorkspaceDomain() ==
                 TheArbiter::WorkspaceDomain::MULPHY_SIM) {
                 m_showMultiphysicsNotMigrated = true;
@@ -260,6 +263,7 @@ bool DiagnosticIdle::handleInput(
             m_showMultiphysicsNotMigrated = false;
             m_arbiter->requestEnterDomain(m_arbiter->getWorkspaceDomain());
             return true;
+
         case WorkspaceInputAction::Back:
             return true;
         default:
@@ -310,7 +314,7 @@ WorkspacePresentation DiagnosticIdle::buildPresentation() const {
 
     WorkspacePanelRow unitRow;
     unitRow.label = "[3]: SIM UNIT MEASUREMENT";
-    unitRow.value = std::to_string(m_simUnitMeasurement);
+    unitRow.value = selectedUnitMeasurementName();
     unitRow.selectable = true;
     unitRow.selected = m_activeShellRow == GlobalShellRow::SimulationUnit;
     section.rows.push_back(unitRow);
@@ -333,14 +337,38 @@ WorkspacePresentation DiagnosticIdle::buildPresentation() const {
             "} IS UNAVAILABLE. SELECT { 4 } TO CONTINUE.";
         p.statusTone = WorkspaceStatusTone::Warning;
     }
-    else if (!m_arbiter ||
-        m_arbiter->getWorkspaceDomain() == TheArbiter::WorkspaceDomain::NONE) {
+    else if (!m_arbiter || m_arbiter->getWorkspaceDomain() == TheArbiter::WorkspaceDomain::NONE) {
         p.statusLine = "IDLE selected: choose a workspace environment.";
         p.statusTone = WorkspaceStatusTone::Warning;
     }
     else {
         p.statusLine = "READY: GLOBAL SHELL CONFIGURATION VALID.";
         p.statusTone = WorkspaceStatusTone::Ready;
+    }
+
+    if (m_arbiter && m_arbiter->getUnitMeasurement() == TheArbiter::UnitMeasurement::IMPERIAL) {
+
+        p.statusLine =
+            "Unit measurement unavailable.";
+
+        p.statusTone =
+            WorkspaceStatusTone::Warning;
+    }
+    else if (!m_arbiter || m_arbiter->getWorkspaceDomain() == TheArbiter::WorkspaceDomain::NONE) {
+
+        p.statusLine =
+            "IDLE selected: choose a workspace environment.";
+
+        p.statusTone =
+            WorkspaceStatusTone::Warning;
+    }
+    else {
+
+        p.statusLine =
+            "READY: GLOBAL SHELL CONFIGURATION VALID.";
+
+        p.statusTone =
+            WorkspaceStatusTone::Ready;
     }
 
     p.footerLine1 = "W/S: Select row    A/D: Change value    E: Configure";
@@ -396,6 +424,21 @@ const char* DiagnosticIdle::selectedEnvironmentName() const {
     }
 }
 
+const char* DiagnosticIdle::selectedUnitMeasurementName() const {
+    if (!m_arbiter)
+        return "METRIC";
+
+    switch (m_arbiter->getUnitMeasurement()) {
+
+    case TheArbiter::UnitMeasurement::IMPERIAL:
+        return "IMPERIAL";
+
+    case TheArbiter::UnitMeasurement::METRIC:
+    default:
+        return "METRIC";
+    }
+}
+
 void DiagnosticIdle::cycleEnvironment(int direction) {
     if (!m_arbiter || direction == 0) return;
 
@@ -408,7 +451,7 @@ void DiagnosticIdle::cycleEnvironment(int direction) {
     };
 
     int current = 0;
-    for (int i = 0; i < 4; ++i) {
+    for (int i = 0; i < 4; i++) {
         if (order[i] == m_arbiter->getWorkspaceDomain()) {
             current = i;
             break;
@@ -419,6 +462,23 @@ void DiagnosticIdle::cycleEnvironment(int direction) {
     const int next = (current + step + 4) % 4;
     m_arbiter->setWorkspaceDomain(order[next]);
     m_showMultiphysicsNotMigrated = false;
+}
+
+void DiagnosticIdle::cycleUnitMeasurement(int direction) {
+    if (!m_arbiter || direction == 0)
+        return;
+
+    using Unit = TheArbiter::UnitMeasurement;
+
+    const Unit current =
+        m_arbiter->getUnitMeasurement();
+
+    if (current == Unit::METRIC) {
+        m_arbiter->setUnitMeasurement(Unit::IMPERIAL);
+    }
+    else {
+        m_arbiter->setUnitMeasurement(Unit::METRIC);
+    }
 }
 
 void DiagnosticIdle::moveGlobalShellCursor(int direction) {
@@ -459,10 +519,7 @@ void DiagnosticIdle::adjustGlobalShellValue(int direction) {
     }
 
     case GlobalShellRow::SimulationUnit:
-        m_simUnitMeasurement += direction < 0 ? -1 : 1;
-        if (m_simUnitMeasurement < 0) m_simUnitMeasurement = 360;
-        if (m_simUnitMeasurement > 360) m_simUnitMeasurement = 0;
-        m_showMultiphysicsNotMigrated = false;
+        cycleUnitMeasurement(direction);
         break;
 
     case GlobalShellRow::Configure:

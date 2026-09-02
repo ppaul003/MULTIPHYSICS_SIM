@@ -11,6 +11,11 @@ public:
         DOMAIN_SELECTION
     };
 
+    enum class UnitMeasurement {
+        METRIC = 0,
+        IMPERIAL
+    };
+
     enum class WorkspaceDomain {
         NONE = 0,
         GRID_2D,
@@ -88,9 +93,15 @@ public:
     bool isGlobalShell() const;
     bool isDomainSelection() const;
 
+    void setUnitMeasurement(UnitMeasurement unit) { m_unitMeasurement = unit; }
+    UnitMeasurement getUnitMeasurement() const { return m_unitMeasurement; }
+
 private:
     NavigationState m_navigation;
     NavigationRequest m_navigationRequest;
+
+    UnitMeasurement m_unitMeasurement =
+        UnitMeasurement::METRIC;
 };
 
 #endif
