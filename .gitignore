@@ -1,0 +1,26 @@
+@"
+# Visual Studio
+.vs/
+x64/
+Debug/
+Release/
+*.user
+*.suo
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.idb
+*.tlog
+*.log
+*.lastbuildstate
+*.recipe
+*.cache
+
+# CUDA / build intermediates
+*.deps
+
+# OS junk
+Thumbs.db
+.DS_Store
+"@ | Set-Content .gitignore
