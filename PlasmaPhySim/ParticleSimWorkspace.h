@@ -2,6 +2,7 @@
 #define VITRUGEN_PARTICLE_SIM_WORKSPACE_H
 
 #include <memory>
+#include <string>
 #include <vector>
 
 #include <vector_types.h>
@@ -39,6 +40,19 @@ public:
 		buildPresentation() const override;
 
 private:
+	enum class Layer1Row {
+		WorkspaceSelection = 0,
+		ParticleMode,
+		GridLayout,
+		Configure,
+		Count
+	};
+
+	enum class ParticleMode {
+		Baseline = 0,
+		Electromagnetics
+	};
+
 	enum class GridLayout {
 		None = 0,
 		Minimal,
@@ -120,6 +134,11 @@ private:
 	};
 
 	bool resolveRuntimeConfig(RuntimeConfig& resolved) const;
+	bool applyRuntimeConfig();
+	void moveCursor(int direction);
+	void adjustSelectedValue(int direction, WorkspaceServices& services);
+	const char* particleModeName() const;
+	const char* gridLayoutName() const;
 
 private:
 	static constexpr float
@@ -149,6 +168,10 @@ private:
 
 	DraftConfig m_draftConfig;
 	RuntimeConfig m_runtimeConfig;
+	Layer1Row m_activeRow = Layer1Row::WorkspaceSelection;
+	ParticleMode m_particleMode = ParticleMode::Baseline;
+	std::string m_statusLine = "READY: CUDA PARTICLE BASELINE.";
+	WorkspaceStatusTone m_statusTone = WorkspaceStatusTone::Ready;
 
 	bool m_initialized = false;
 	bool m_active = false;

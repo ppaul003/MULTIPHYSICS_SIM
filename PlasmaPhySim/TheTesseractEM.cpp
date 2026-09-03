@@ -3,6 +3,89 @@
 
 #include <cstdio>
 
+bool MultiphysicsSimPlaceholderWorkspace::initialize(WorkspaceServices& services) {
+    m_arbiter = services.arbiter;
+    return m_arbiter != nullptr;
+}
+
+void MultiphysicsSimPlaceholderWorkspace::enter(WorkspaceServices& services) {
+    if (!m_arbiter) m_arbiter = services.arbiter;
+    m_active = true;
+}
+
+void MultiphysicsSimPlaceholderWorkspace::exit(WorkspaceServices& services) {
+    (void)services;
+    m_active = false;
+}
+
+void MultiphysicsSimPlaceholderWorkspace::update(
+    const WorkspaceFrameContext& frame,
+    WorkspaceServices& services) {
+    (void)frame;
+    (void)services;
+}
+
+void MultiphysicsSimPlaceholderWorkspace::render(
+    const WorkspaceFrameContext& frame,
+    WorkspaceServices& services) {
+    (void)frame;
+    (void)services;
+}
+
+bool MultiphysicsSimPlaceholderWorkspace::handleInput(
+    const WorkspaceInputEvent& input,
+    WorkspaceServices& services) {
+
+    if (!m_active) return false;
+    if (!m_arbiter) m_arbiter = services.arbiter;
+    if (!m_arbiter) return false;
+
+    switch (input.action) {
+    case WorkspaceInputAction::Decrease:
+    case WorkspaceInputAction::Increase:
+    case WorkspaceInputAction::Activate:
+        m_arbiter->setActiveWorkspace(
+            TheArbiter::WorkspaceId::PARTICLE_SIMULATION);
+        return true;
+    case WorkspaceInputAction::Back:
+        m_arbiter->requestReturnToGlobalShell(
+            TheArbiter::WorkspaceDomain::MULPHY_SIM);
+        return true;
+    case WorkspaceInputAction::Previous:
+    case WorkspaceInputAction::Next:
+        return true;
+    default:
+        return false;
+    }
+}
+
+WorkspacePresentation
+MultiphysicsSimPlaceholderWorkspace::buildPresentation() const {
+    WorkspacePresentation p;
+    p.panelVisible = true;
+    p.workspaceName = "LAYER 1 -> MULPHY_SIM WORKSPACE CONFIGURATION";
+    p.layerLabel = "MODE: MULTIPHYSICS_SIM";
+
+    WorkspacePanelSection section;
+    WorkspacePanelRow selectionRow;
+    selectionRow.label = "[1]: MULPHY_SIM SELECTION";
+    selectionRow.value = "MULTIPHYSICS_SIM";
+    selectionRow.selectable = true;
+    selectionRow.selected = true;
+    section.rows.push_back(selectionRow);
+
+    WorkspacePanelRow reservedRow;
+    reservedRow.label = "MULTIPHYSICS_SIM is reserved for the next pass";
+    section.rows.push_back(reservedRow);
+    p.sections.push_back(section);
+
+    p.statusLine = "MULTIPHYSICS_SIM is reserved for the next pass";
+    p.statusTone = WorkspaceStatusTone::Warning;
+    p.footerLine1 = "A/D or E: Select PARTICLE_SIM";
+    p.footerLine2 = "Q: Return to Global Shell    ESC: Exit";
+    return p;
+}
+
 bool Tesseract::initialize(WorkspaceServices services) {
     m_services = services;
 
@@ -28,6 +111,16 @@ bool Tesseract::initialize(WorkspaceServices services) {
 
     if (!m_annDesignWorkspace.initialize(m_services)) {
         std::printf("[Tesseract] ERROR: ANNDesignWorkspace initialization failed.\n");
+        return false;
+    }
+
+    if (!m_particleSimWorkspace.initialize(m_services)) {
+        std::printf("[Tesseract] ERROR: ParticleSimWorkspace initialization failed.\n");
+        return false;
+    }
+
+    if (!m_multiphysicsPlaceholderWorkspace.initialize(m_services)) {
+        std::printf("[Tesseract] ERROR: MULTIPHYSICS_SIM placeholder initialization failed.\n");
         return false;
     }
 
@@ -170,6 +263,37 @@ WorkspacePresentation Tesseract::presentation() const {
         }
     }
 
+    if (m_transitionDomain == Domain::MULPHY_SIM) {
+        switch (m_domainTransitionPhase) {
+        case Phase::ENTER_DOMAIN_VISUAL: {
+            WorkspacePresentation p = m_diagnosticIdle.buildPresentation();
+            p.statusLine = "AUTO: Transitioning To MULPHY_SIM...";
+            p.statusTone = WorkspaceStatusTone::Transition;
+            p.statusBlink = true;
+            p.frameTone = WorkspaceStatusTone::Transition;
+            p.frameBlink = true;
+            return p;
+        }
+        case Phase::ENTER_DOMAIN_READY: {
+            WorkspacePresentation p = m_diagnosticIdle.buildPresentation();
+            p.statusLine = "READY: MULPHY_SIM Setup Complete.";
+            p.statusTone = WorkspaceStatusTone::Ready;
+            p.statusBlink = false;
+            p.frameTone = WorkspaceStatusTone::Ready;
+            p.frameBlink = false;
+            return p;
+        }
+        case Phase::ENTER_CAMERA: {
+            WorkspacePresentation p = m_particleSimWorkspace.buildPresentation();
+            p.frameTone = WorkspaceStatusTone::Ready;
+            p.frameBlink = false;
+            return p;
+        }
+        default:
+            break;
+        }
+    }
+
     return m_activeWorkspace->buildPresentation();
 }
 
@@ -186,7 +310,9 @@ void Tesseract::processNavigationRequest() {
 
     switch (request.type) {
     case Request::ENTER_DOMAIN:
-        if (request.domain != Domain::GRID_2D && request.domain != Domain::GRID_3D)
+        if (request.domain != Domain::GRID_2D &&
+            request.domain != Domain::GRID_3D &&
+            request.domain != Domain::MULPHY_SIM)
             return;
 
         m_transitionDomain = request.domain;
@@ -194,8 +320,10 @@ void Tesseract::processNavigationRequest() {
 
         if (request.domain == Domain::GRID_2D)
             m_diagnosticIdle.beginGrid2DEnterTransition();
-        else
+        else if (request.domain == Domain::GRID_3D)
             m_diagnosticIdle.beginGrid3DEnterTransition();
+        else
+            m_diagnosticIdle.beginMulphyEnterTransition();
         return;
 
     case Request::RETURN_GLOBAL_SHELL:
@@ -215,6 +343,17 @@ void Tesseract::processNavigationRequest() {
             else {
                 m_domainTransitionPhase = DomainTransitionPhase::EXIT_DOMAIN_VISUAL;
                 m_diagnosticIdle.beginGrid3DReturnTransition();
+            }
+            return;
+        }
+
+        if (request.domain == Domain::MULPHY_SIM) {
+            m_domainTransitionPhase = DomainTransitionPhase::EXIT_CAMERA;
+            if (m_services.camera)
+                m_services.camera->beginTransitionToMenu(kGrid3DCamTransDuration);
+            else {
+                m_domainTransitionPhase = DomainTransitionPhase::EXIT_DOMAIN_VISUAL;
+                m_diagnosticIdle.beginMulphyReturnTransition();
             }
             return;
         }
@@ -240,9 +379,10 @@ void Tesseract::updateDomainTransition(const WorkspaceFrameContext& frame) {
         if (m_transitionDomain == Domain::GRID_2D) {
             if (!m_diagnosticIdle.grid2DEnterVisualComplete()) return;
         }
-        else {
+        else if (m_transitionDomain == Domain::GRID_3D) {
             if (!m_diagnosticIdle.grid3DEnterVisualComplete()) return;
         }
+        else if (!m_diagnosticIdle.mulphyEnterVisualComplete()) return;
 
         m_domainTransitionPhase = Phase::ENTER_DOMAIN_READY;
         m_transitionPhaseElapsed = 0.0f;
@@ -276,7 +416,9 @@ void Tesseract::updateDomainTransition(const WorkspaceFrameContext& frame) {
         }
 
         m_services.arbiter->setActiveWorkspace(
-            TheArbiter::WorkspaceId::GRAPH_3D);
+            m_transitionDomain == Domain::MULPHY_SIM
+            ? TheArbiter::WorkspaceId::PARTICLE_SIMULATION
+            : TheArbiter::WorkspaceId::GRAPH_3D);
         m_services.arbiter->setApplicationLayer(Layer::DOMAIN_SELECTION);
         m_domainTransitionPhase = Phase::NONE;
         m_transitionDomain = Domain::NONE;
@@ -318,7 +460,10 @@ void Tesseract::updateDomainTransition(const WorkspaceFrameContext& frame) {
         }
 
         m_domainTransitionPhase = Phase::EXIT_DOMAIN_VISUAL;
-        m_diagnosticIdle.beginGrid3DReturnTransition();
+        if (m_transitionDomain == Domain::MULPHY_SIM)
+            m_diagnosticIdle.beginMulphyReturnTransition();
+        else
+            m_diagnosticIdle.beginGrid3DReturnTransition();
         return;
 
     case Phase::EXIT_2D_CAMERA_X:
@@ -350,9 +495,10 @@ void Tesseract::updateDomainTransition(const WorkspaceFrameContext& frame) {
         if (m_transitionDomain == Domain::GRID_2D) {
             if (!m_diagnosticIdle.grid2DReturnVisualComplete()) return;
         }
-        else {
+        else if (m_transitionDomain == Domain::GRID_3D) {
             if (!m_diagnosticIdle.grid3DReturnVisualComplete()) return;
         }
+        else if (!m_diagnosticIdle.mulphyReturnVisualComplete()) return;
 
         m_services.arbiter->setApplicationLayer(Layer::GLOBAL_SHELL);
         m_services.arbiter->setActiveWorkspace(TheArbiter::WorkspaceId::DIAGNOSTIC);
@@ -404,6 +550,19 @@ void Tesseract::synchronizeActiveCartridge() {
             default:
                 desired = &m_graph3DWorkspace;
                 desiredName = "GRAPH_3D";
+                break;
+            }
+        }
+        else if (m_services.arbiter->getWorkspaceDomain() == Domain::MULPHY_SIM) {
+            switch (m_services.arbiter->getActiveWorkspace()) {
+            case Workspace::MULTIPHYSICS_SIM:
+                desired = &m_multiphysicsPlaceholderWorkspace;
+                desiredName = "MULTIPHYSICS_SIM";
+                break;
+            case Workspace::PARTICLE_SIMULATION:
+            default:
+                desired = &m_particleSimWorkspace;
+                desiredName = "PARTICLE_SIMULATION";
                 break;
             }
         }

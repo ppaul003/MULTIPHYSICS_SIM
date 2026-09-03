@@ -19,6 +19,27 @@
 #include "Graph2DWorkspace.h"
 #include "Heat2DWorkspace.h"
 
+class MultiphysicsSimPlaceholderWorkspace final : public IWorkspace {
+public:
+    bool initialize(WorkspaceServices& services) override;
+    void enter(WorkspaceServices& services) override;
+    void exit(WorkspaceServices& services) override;
+    void update(
+        const WorkspaceFrameContext& frame,
+        WorkspaceServices& services) override;
+    void render(
+        const WorkspaceFrameContext& frame,
+        WorkspaceServices& services) override;
+    bool handleInput(
+        const WorkspaceInputEvent& input,
+        WorkspaceServices& services) override;
+    WorkspacePresentation buildPresentation() const override;
+
+private:
+    TheArbiter* m_arbiter = nullptr;
+    bool m_active = false;
+};
+
 class Tesseract {
 public:
     enum class DomainTransitionPhase {
@@ -66,6 +87,7 @@ private:
     DiagnosticIdle m_diagnosticIdle;
 
     ParticleSimWorkspace m_particleSimWorkspace;
+    MultiphysicsSimPlaceholderWorkspace m_multiphysicsPlaceholderWorkspace;
 
     Graph3DWorkspace m_graph3DWorkspace;
     ANNDesignWorkspace m_annDesignWorkspace;

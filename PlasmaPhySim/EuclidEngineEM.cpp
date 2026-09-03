@@ -70,8 +70,7 @@ namespace {
                     IMAGE_ICON,
                     largeWidth,
                     largeHeight,
-                    LR_LOADFROMFILE
-                )
+                    LR_LOADFROMFILE)
                 );
 
         g_vitruGenSmallIcon =
@@ -274,7 +273,7 @@ void EuclidEngine::computeFPS() {
         static_cast<float>(elapsed);
 
     char title[128];
-    std::snprintf(title, sizeof(title), "NDMSM Baseline Ver0.0.0 : %.1f fps", fps);
+    std::snprintf(title, sizeof(title), "NDMSM Sytem Ver0.0.0 : %.1f fps", fps);
     glutSetWindowTitle(title);
 
     frameCount = 0;

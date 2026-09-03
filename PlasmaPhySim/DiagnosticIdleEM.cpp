@@ -10,7 +10,15 @@ using namespace glm;
 
 bool DiagnosticIdle::initialize(WorkspaceServices& services) {
     m_arbiter = services.arbiter;
-    return services.renderer != nullptr && m_arbiter != nullptr;
+    if (!services.renderer || !m_arbiter) return false;
+
+    m_transitionGridDimension = std::max(1, services.renderer->getGridDimSize());
+    m_transitionGridMajorEvery = std::max(1, services.renderer->getGridMajorEvery());
+    m_mulphyMajorCount = std::max(
+        1,
+        (m_transitionGridDimension + m_transitionGridMajorEvery - 1) /
+        m_transitionGridMajorEvery);
+    return true;
 }
 
 void DiagnosticIdle::enter(WorkspaceServices& services) {
@@ -121,6 +129,127 @@ void DiagnosticIdle::update(
             m_grid2DReturnComplete = true;
         }
         break;
+
+    case VisualTransitionState::Mulphy_OrientToFront:
+        m_previewRotationDegrees += kTransitionRotationSpeed * dt;
+        m_sliceTravel += kTransitionSliceSpeed * dt;
+        if (m_previewRotationDegrees >= m_targetRotationDegrees) {
+            m_previewRotationDegrees = m_targetRotationDegrees;
+
+            float target = std::floor(m_sliceTravel / 3.0f) * 3.0f;
+            if (target <= m_sliceTravel) target += 3.0f;
+
+            m_targetSliceTravel = target;
+            m_visualTransition = VisualTransitionState::Mulphy_WaitForXYStart;
+        }
+        break;
+
+    case VisualTransitionState::Mulphy_WaitForXYStart:
+        m_sliceTravel += kTransitionSliceSpeed * dt;
+        if (m_sliceTravel >= m_targetSliceTravel) {
+            m_sliceTravel = m_targetSliceTravel;
+            m_mulphyPlaneProgress = 0.0f;
+            m_mulphyTargetMajorIndex = 1;
+            m_visualTransition = VisualTransitionState::Mulphy_SweepToMajor;
+        }
+        break;
+
+    case VisualTransitionState::Mulphy_SweepToMajor: {
+        const float targetProgress = std::min(
+            1.0f,
+            static_cast<float>(
+                std::min(
+                    m_transitionGridDimension,
+                    m_mulphyTargetMajorIndex * m_transitionGridMajorEvery)) /
+            static_cast<float>(m_transitionGridDimension));
+
+        m_mulphyPlaneProgress = std::min(
+            targetProgress,
+            m_mulphyPlaneProgress + kTransitionSliceSpeed * dt);
+        m_sliceTravel = m_targetSliceTravel + m_mulphyPlaneProgress;
+
+        if (m_mulphyPlaneProgress >= targetProgress) {
+            m_mulphyClearedProgress = targetProgress;
+            m_mulphyMajorHoldElapsed = 0.0f;
+            m_visualTransition = VisualTransitionState::Mulphy_HoldMajor;
+        }
+        break;
+    }
+
+    case VisualTransitionState::Mulphy_HoldMajor:
+        m_mulphyMajorHoldElapsed += dt;
+        if (m_mulphyMajorHoldElapsed < kMulphyMajorHoldDuration) break;
+
+        if (m_mulphyPlaneProgress >= 1.0f) {
+            m_mulphyAxisProgress = 0.0f;
+            m_visualTransition = VisualTransitionState::Mulphy_AxisToOrigin;
+        }
+        else {
+            ++m_mulphyTargetMajorIndex;
+            m_visualTransition = VisualTransitionState::Mulphy_SweepToMajor;
+        }
+        break;
+
+    case VisualTransitionState::Mulphy_AxisToOrigin:
+        m_mulphyAxisProgress = std::min(
+            1.0f,
+            m_mulphyAxisProgress + dt / kMulphyAxisTransitionDuration);
+        if (m_mulphyAxisProgress >= 1.0f) {
+            m_visualTransition = VisualTransitionState::Mulphy_HoldVolume;
+            m_mulphyEnterComplete = true;
+        }
+        break;
+
+    case VisualTransitionState::Mulphy_HoldVolume:
+        break;
+
+    case VisualTransitionState::Mulphy_ReturnAxisToCenter:
+        m_mulphyAxisProgress = std::max(
+            0.0f,
+            m_mulphyAxisProgress - dt / kMulphyAxisTransitionDuration);
+        if (m_mulphyAxisProgress <= 0.0f) {
+            m_mulphyPlaneProgress = 1.0f;
+            m_mulphyTargetMajorIndex = std::max(0, m_mulphyMajorCount - 1);
+            m_visualTransition = VisualTransitionState::Mulphy_ReturnSweepToMajor;
+        }
+        break;
+
+    case VisualTransitionState::Mulphy_ReturnSweepToMajor: {
+        const int targetCell = std::min(
+            m_transitionGridDimension,
+            m_mulphyTargetMajorIndex * m_transitionGridMajorEvery);
+        const float targetProgress =
+            static_cast<float>(targetCell) /
+            static_cast<float>(m_transitionGridDimension);
+
+        m_mulphyPlaneProgress = std::max(
+            targetProgress,
+            m_mulphyPlaneProgress - kTransitionSliceSpeed * dt);
+        m_sliceTravel = m_targetSliceTravel + m_mulphyPlaneProgress;
+
+        if (m_mulphyPlaneProgress <= targetProgress) {
+            m_mulphyClearedProgress = targetProgress;
+            m_mulphyMajorHoldElapsed = 0.0f;
+            m_visualTransition = VisualTransitionState::Mulphy_ReturnHoldMajor;
+        }
+        break;
+    }
+
+    case VisualTransitionState::Mulphy_ReturnHoldMajor:
+        m_mulphyMajorHoldElapsed += dt;
+        if (m_mulphyMajorHoldElapsed < kMulphyMajorHoldDuration) break;
+
+        if (m_mulphyTargetMajorIndex <= 0) {
+            m_mulphyPlaneProgress = 0.0f;
+            m_sliceTravel = m_targetSliceTravel;
+            m_visualTransition = VisualTransitionState::Idle;
+            m_mulphyReturnComplete = true;
+        }
+        else {
+            --m_mulphyTargetMajorIndex;
+            m_visualTransition = VisualTransitionState::Mulphy_ReturnSweepToMajor;
+        }
+        break;
     }
 }
 
@@ -134,17 +263,17 @@ void DiagnosticIdle::render(
     EuclidRenderer& renderer = *services.renderer;
     EuclidRenderer::UniformGrid grid;
 
-    constexpr int kGridDim = 64;
-    constexpr int kMajorEvery = 8;
+    const int gridDim = std::max(1, renderer.getGridDimSize());
+    const int majorEvery = std::max(1, renderer.getGridMajorEvery());
 
     const float boxSize = static_cast<float>(renderer.getSimBoxSize());
     const float halfBox = boxSize * 0.5f;
-    const float cellSize = boxSize / static_cast<float>(kGridDim);
+    const float cellSize = boxSize / static_cast<float>(gridDim);
 
-    grid.dimensions = ivec3(kGridDim);
+    grid.dimensions = ivec3(gridDim);
     grid.origin = vec3(-halfBox);
     grid.cellSize = vec3(cellSize);
-    grid.majorEvery = kMajorEvery;
+    grid.majorEvery = majorEvery;
 
     EuclidRenderer::GridDisplay display;
     display.boundary = true;
@@ -161,6 +290,54 @@ void DiagnosticIdle::render(
         m_visualTransition == VisualTransitionState::Grid2D_SweepToFront ||
         m_visualTransition == VisualTransitionState::Grid2D_HoldFront ||
         m_visualTransition == VisualTransitionState::Grid2D_ReturnSweep;
+
+    const bool mulphySweepVisual =
+        m_visualTransition == VisualTransitionState::Mulphy_SweepToMajor ||
+        m_visualTransition == VisualTransitionState::Mulphy_HoldMajor ||
+        m_visualTransition == VisualTransitionState::Mulphy_ReturnSweepToMajor ||
+        m_visualTransition == VisualTransitionState::Mulphy_ReturnHoldMajor;
+
+    const bool mulphyCleanVolumeVisual =
+        m_visualTransition == VisualTransitionState::Mulphy_AxisToOrigin ||
+        m_visualTransition == VisualTransitionState::Mulphy_HoldVolume ||
+        m_visualTransition == VisualTransitionState::Mulphy_ReturnAxisToCenter;
+
+    if (mulphySweepVisual || mulphyCleanVolumeVisual) {
+        renderer.drawGridBoundary(grid);
+
+        if (mulphySweepVisual) {
+            EuclidRenderer::GridDisplay internalDisplay;
+            internalDisplay.boundary = false;
+            internalDisplay.majorGrid = true;
+            internalDisplay.minorGrid = false;
+            internalDisplay.axes = false;
+
+            const float planePosition =
+                grid.origin.z + boxSize * m_mulphyPlaneProgress;
+            const float visibleGridStart =
+                grid.origin.z + boxSize * m_mulphyClearedProgress;
+
+            renderer.drawUniformGridZRange(
+                grid,
+                visibleGridStart,
+                grid.origin.z + boxSize,
+                internalDisplay);
+            renderer.drawGridPlane(
+                grid,
+                EuclidRenderer::PLANE_XY,
+                planePosition,
+                false);
+        }
+
+        const vec3 axisOrigin = mix(
+            vec3(0.0f),
+            grid.origin,
+            std::clamp(m_mulphyAxisProgress, 0.0f, 1.0f));
+        renderer.drawAxisGizmo(axisOrigin, boxSize * 0.20f);
+
+        glPopMatrix();
+        return;
+    }
 
     if (grid2DPlanarVisual) {
         const float planePosition =
@@ -190,10 +367,10 @@ void DiagnosticIdle::render(
     const int segment = std::min(2, static_cast<int>(sliceCycle));
     const float local = sliceCycle - static_cast<float>(segment);
 
-    const int halfSlice = kGridDim / 2;
+    const int halfSlice = gridDim / 2;
     const int sliceOffset = static_cast<int>(std::round(
         -halfSlice + local * static_cast<float>(halfSlice * 2)));
-    const int sliceIndex = std::clamp(halfSlice + sliceOffset, 0, kGridDim);
+    const int sliceIndex = std::clamp(halfSlice + sliceOffset, 0, gridDim);
 
     EuclidRenderer::GridPlane plane = EuclidRenderer::PLANE_XY;
     float planePosition = 0.0f;
@@ -249,18 +426,12 @@ bool DiagnosticIdle::handleInput(
             if (m_arbiter->getUnitMeasurement() ==
                 TheArbiter::UnitMeasurement::IMPERIAL)
                 return true;
-            if (m_arbiter->getWorkspaceDomain() ==
-                TheArbiter::WorkspaceDomain::MULPHY_SIM) {
-                m_showMultiphysicsNotMigrated = true;
-                return true;
-            }
             if (m_requestedSimBoxSize != 4)
                 return true;
 
             if (services.renderer)
                 services.renderer->setSimBoxSize(m_requestedSimBoxSize);
 
-            m_showMultiphysicsNotMigrated = false;
             m_arbiter->requestEnterDomain(m_arbiter->getWorkspaceDomain());
             return true;
 
@@ -327,8 +498,9 @@ WorkspacePresentation DiagnosticIdle::buildPresentation() const {
 
     p.sections.push_back(section);
 
-    if (m_showMultiphysicsNotMigrated) {
-        p.statusLine = "MULTIPHYSICS_SIM cartridge is not migrated.";
+    if (m_arbiter &&
+        m_arbiter->getUnitMeasurement() == TheArbiter::UnitMeasurement::IMPERIAL) {
+        p.statusLine = "Unit measurement unavailable.";
         p.statusTone = WorkspaceStatusTone::Warning;
     }
     else if (m_requestedSimBoxSize != 4) {
@@ -344,31 +516,6 @@ WorkspacePresentation DiagnosticIdle::buildPresentation() const {
     else {
         p.statusLine = "READY: GLOBAL SHELL CONFIGURATION VALID.";
         p.statusTone = WorkspaceStatusTone::Ready;
-    }
-
-    if (m_arbiter && m_arbiter->getUnitMeasurement() == TheArbiter::UnitMeasurement::IMPERIAL) {
-
-        p.statusLine =
-            "Unit measurement unavailable.";
-
-        p.statusTone =
-            WorkspaceStatusTone::Warning;
-    }
-    else if (!m_arbiter || m_arbiter->getWorkspaceDomain() == TheArbiter::WorkspaceDomain::NONE) {
-
-        p.statusLine =
-            "IDLE selected: choose a workspace environment.";
-
-        p.statusTone =
-            WorkspaceStatusTone::Warning;
-    }
-    else {
-
-        p.statusLine =
-            "READY: GLOBAL SHELL CONFIGURATION VALID.";
-
-        p.statusTone =
-            WorkspaceStatusTone::Ready;
     }
 
     p.footerLine1 = "W/S: Select row    A/D: Change value    E: Configure";
@@ -409,6 +556,30 @@ void DiagnosticIdle::beginGrid2DReturnTransition() {
     m_targetSliceTravel = std::floor(m_sliceTravel / 3.0f) * 3.0f;
     m_sliceTravel = m_targetSliceTravel + 1.0f;
     m_visualTransition = VisualTransitionState::Grid2D_ReturnSweep;
+}
+
+void DiagnosticIdle::beginMulphyEnterTransition() {
+    m_mulphyEnterComplete = false;
+    m_mulphyReturnComplete = false;
+    m_mulphyPlaneProgress = 0.0f;
+    m_mulphyClearedProgress = 0.0f;
+    m_mulphyAxisProgress = 0.0f;
+    m_mulphyMajorHoldElapsed = 0.0f;
+    m_mulphyTargetMajorIndex = 1;
+
+    const float revolution = std::floor(m_previewRotationDegrees / 360.0f);
+    m_targetRotationDegrees = (revolution + 1.0f) * 360.0f;
+    m_visualTransition = VisualTransitionState::Mulphy_OrientToFront;
+}
+
+void DiagnosticIdle::beginMulphyReturnTransition() {
+    m_mulphyReturnComplete = false;
+    m_mulphyAxisProgress = 1.0f;
+    m_mulphyPlaneProgress = 1.0f;
+    m_mulphyClearedProgress = 1.0f;
+    m_mulphyMajorHoldElapsed = 0.0f;
+    m_mulphyTargetMajorIndex = std::max(0, m_mulphyMajorCount - 1);
+    m_visualTransition = VisualTransitionState::Mulphy_ReturnAxisToCenter;
 }
 
 const char* DiagnosticIdle::selectedEnvironmentName() const {
@@ -461,7 +632,6 @@ void DiagnosticIdle::cycleEnvironment(int direction) {
     const int step = direction < 0 ? -1 : 1;
     const int next = (current + step + 4) % 4;
     m_arbiter->setWorkspaceDomain(order[next]);
-    m_showMultiphysicsNotMigrated = false;
 }
 
 void DiagnosticIdle::cycleUnitMeasurement(int direction) {
@@ -514,7 +684,6 @@ void DiagnosticIdle::adjustGlobalShellValue(int direction) {
         const int step = direction < 0 ? -1 : 1;
         index = (index + step + 4) % 4;
         m_requestedSimBoxSize = kBoxSizes[index];
-        m_showMultiphysicsNotMigrated = false;
         break;
     }
 

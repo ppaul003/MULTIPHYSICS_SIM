@@ -19,7 +19,17 @@ public:
         Grid2D_WaitForXYStart,
         Grid2D_SweepToFront,
         Grid2D_HoldFront,
-        Grid2D_ReturnSweep
+        Grid2D_ReturnSweep,
+
+        Mulphy_OrientToFront,
+        Mulphy_WaitForXYStart,
+        Mulphy_SweepToMajor,
+        Mulphy_HoldMajor,
+        Mulphy_AxisToOrigin,
+        Mulphy_HoldVolume,
+        Mulphy_ReturnAxisToCenter,
+        Mulphy_ReturnSweepToMajor,
+        Mulphy_ReturnHoldMajor
     };
 
     bool initialize(WorkspaceServices& services) override;
@@ -44,11 +54,15 @@ public:
     void beginGrid3DReturnTransition();
     void beginGrid2DEnterTransition();
     void beginGrid2DReturnTransition();
+    void beginMulphyEnterTransition();
+    void beginMulphyReturnTransition();
 
     bool grid3DEnterVisualComplete() const { return m_grid3DEnterComplete; }
     bool grid3DReturnVisualComplete() const { return m_grid3DReturnComplete; }
     bool grid2DEnterVisualComplete() const { return m_grid2DEnterComplete; }
     bool grid2DReturnVisualComplete() const { return m_grid2DReturnComplete; }
+    bool mulphyEnterVisualComplete() const { return m_mulphyEnterComplete; }
+    bool mulphyReturnVisualComplete() const { return m_mulphyReturnComplete; }
 
 private:
     enum class GlobalShellRow {
@@ -71,13 +85,13 @@ private:
     static constexpr float kSliceCycleSpeed = 0.35f;
     static constexpr float kTransitionRotationSpeed = 120.0f;
     static constexpr float kTransitionSliceSpeed = 1.40f;
+    static constexpr float kMulphyMajorHoldDuration = 0.12f;
+    static constexpr float kMulphyAxisTransitionDuration = 0.45f;
 
     GlobalShellRow m_activeShellRow = GlobalShellRow::Environment;
     TheArbiter* m_arbiter = nullptr;
 
     int m_requestedSimBoxSize = 4;
-    int m_simUnitMeasurement = 45;
-    bool m_showMultiphysicsNotMigrated = false;
 
     VisualTransitionState m_visualTransition = VisualTransitionState::Idle;
 
@@ -85,12 +99,22 @@ private:
     bool m_grid3DReturnComplete = false;
     bool m_grid2DEnterComplete = false;
     bool m_grid2DReturnComplete = false;
+    bool m_mulphyEnterComplete = false;
+    bool m_mulphyReturnComplete = false;
 
     float m_previewRotationDegrees = 0.0f;
     float m_sliceTravel = 0.0f;
     float m_targetRotationDegrees = 0.0f;
     float m_targetSliceTravel = 0.0f;
     float m_grid2DPlaneProgress = 0.0f;
+    float m_mulphyPlaneProgress = 0.0f;
+    float m_mulphyClearedProgress = 0.0f;
+    float m_mulphyAxisProgress = 0.0f;
+    float m_mulphyMajorHoldElapsed = 0.0f;
+    int m_transitionGridDimension = 64;
+    int m_transitionGridMajorEvery = 8;
+    int m_mulphyMajorCount = 8;
+    int m_mulphyTargetMajorIndex = 1;
 };
 
 #endif

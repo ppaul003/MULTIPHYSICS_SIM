@@ -152,6 +152,28 @@ public:
 
 	void drawGridBoundary(const UniformGrid& grid);
 	void drawGridAxes(const UniformGrid& grid);
+	void drawAxisGizmo(const glm::vec3& origin, float length) {
+		if (length <= 0.0f) return;
+
+		glUseProgram(0);
+		glLineWidth(2.0f);
+		glBegin(GL_LINES);
+
+		glColor4f(1.0f, 0.0f, 0.0f, 1.0f);
+		glVertex3f(origin.x, origin.y, origin.z);
+		glVertex3f(origin.x + length, origin.y, origin.z);
+
+		glColor4f(0.0f, 1.0f, 0.0f, 1.0f);
+		glVertex3f(origin.x, origin.y, origin.z);
+		glVertex3f(origin.x, origin.y + length, origin.z);
+
+		glColor4f(0.0f, 0.0f, 1.0f, 1.0f);
+		glVertex3f(origin.x, origin.y, origin.z);
+		glVertex3f(origin.x, origin.y, origin.z + length);
+
+		glEnd();
+		glLineWidth(1.0f);
+	}
 
     void drawGridPlane(
         const UniformGrid& grid,
