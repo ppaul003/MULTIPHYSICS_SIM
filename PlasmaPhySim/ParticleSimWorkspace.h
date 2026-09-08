@@ -9,12 +9,11 @@
 #include <vector_functions.h>
 #include <cuda_runtime.h>
 
+#include "TheArbiterEM.h"
 #include "IWorkspaceEM.h"
 #include "particleSystem.h"
 
-class ParticleSimWorkspace :
-	public IWorkspace {
-
+class ParticleSimWorkspace : public IWorkspace {
 public:
 	bool initialize(WorkspaceServices& services) override;
 
@@ -36,8 +35,9 @@ public:
 		WorkspaceServices& services
 	) override;
 
-	WorkspacePresentation
-		buildPresentation() const override;
+	WorkspacePresentation buildPresentation() const override;
+	WorkspacePresentation buildLayer1TransitionPresentation() const;
+
 
 private:
 	enum class Layer1Row {
@@ -132,40 +132,35 @@ private:
 		ResetMode resetMode =
 			ResetMode::Default;
 	};
+	
+	WorkspacePresentation buildLayer1Presentation() const;
+	//WorkspacePresentation buildLayer2Presentation() const;
+	//WorkspacePresentation buildLayer3Presentation() const;
 
+	void renderLayer1DomainBoundary(WorkspaceServices& services) const;
 	bool resolveRuntimeConfig(RuntimeConfig& resolved) const;
 	bool applyRuntimeConfig();
 	void moveCursor(int direction);
 	void adjustSelectedValue(int direction, WorkspaceServices& services);
 	const char* particleModeName() const;
 	const char* gridLayoutName() const;
+	
 
 private:
-	static constexpr float
-		kMaximumSupportedRadius = 0.0156f;
+	static constexpr float kMaximumSupportedRadius = 0.0156f;
+	static constexpr unsigned int kParticleCapacity = 16384;
+	static constexpr unsigned int kGridSize = 64;
 
-	static constexpr unsigned int
-		kParticleCapacity = 16384;
 
-	static constexpr unsigned int
-		kGridSize = 64;
+	unsigned int m_capacity = kParticleCapacity;
+	unsigned int m_activeCount = kParticleCapacity;
 
-	unsigned int m_capacity =
-		kParticleCapacity;
-
-	unsigned int m_activeCount =
-		kParticleCapacity;
-
-	uint3 m_gridDimensions =
-		make_uint3(
-			kGridSize,
-			kGridSize,
-			kGridSize
-		);
+	uint3 m_gridDimensions = make_uint3(kGridSize, kGridSize, kGridSize);
 
 	std::unique_ptr<ParticleSystem> m_particleSystem;
 	std::vector<float> m_radii;
 
+	TheArbiter* m_arbiter = nullptr;
 	DraftConfig m_draftConfig;
 	RuntimeConfig m_runtimeConfig;
 	Layer1Row m_activeRow = Layer1Row::WorkspaceSelection;

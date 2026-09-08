@@ -8,7 +8,9 @@ class TheArbiter {
 public:
     enum class ApplicationLayer {
         GLOBAL_SHELL = 0,
-        DOMAIN_SELECTION
+        DOMAIN_SELECTION,
+        WORKSPACE_CONFIGURATION,
+        ACTIVE_WORKSPACE
     };
 
     enum class UnitMeasurement {

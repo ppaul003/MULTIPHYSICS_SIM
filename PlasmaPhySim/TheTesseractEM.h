@@ -24,15 +24,21 @@ public:
     bool initialize(WorkspaceServices& services) override;
     void enter(WorkspaceServices& services) override;
     void exit(WorkspaceServices& services) override;
+
     void update(
         const WorkspaceFrameContext& frame,
         WorkspaceServices& services) override;
+
     void render(
         const WorkspaceFrameContext& frame,
-        WorkspaceServices& services) override;
+        WorkspaceServices& services
+    ) override;
+
     bool handleInput(
         const WorkspaceInputEvent& input,
-        WorkspaceServices& services) override;
+        WorkspaceServices& services
+    ) override;
+
     WorkspacePresentation buildPresentation() const override;
 
 private:

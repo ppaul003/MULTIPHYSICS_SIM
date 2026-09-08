@@ -252,8 +252,10 @@ WorkspacePresentation Tesseract::presentation() const {
             return p;
         }
         case Phase::ENTER_CAMERA: {
+
             WorkspacePresentation p =
                 m_graph3DWorkspace.buildLayer1TransitionPresentation();
+
             p.frameTone = WorkspaceStatusTone::Ready;
             p.frameBlink = false;
             return p;
@@ -284,7 +286,10 @@ WorkspacePresentation Tesseract::presentation() const {
             return p;
         }
         case Phase::ENTER_CAMERA: {
-            WorkspacePresentation p = m_particleSimWorkspace.buildPresentation();
+
+            WorkspacePresentation p =
+                m_particleSimWorkspace.buildLayer1TransitionPresentation();
+
             p.frameTone = WorkspaceStatusTone::Ready;
             p.frameBlink = false;
             return p;

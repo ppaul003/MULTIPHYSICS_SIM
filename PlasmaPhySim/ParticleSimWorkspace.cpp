@@ -9,21 +9,22 @@
 #include <cmath>
 
 using namespace std;
+using namespace glm;
 
-bool ParticleSimWorkspace::initialize(
-	WorkspaceServices& services) {
-
+bool ParticleSimWorkspace::initialize(WorkspaceServices& services) {
 	if (m_initialized) return true;
+	if (!services.renderer || !services.arbiter) return false;
 
-	if (!services.renderer ||
-		!services.arbiter) return false;
+	// ---------------------------------------------------------
+	// Cache host service needed by parameterless presentation
+	// dispatch. Non-owning pointer; Tesseract owns the Arbiter.
+	// ---------------------------------------------------------
+	m_arbiter = services.arbiter;
 
 	m_radii.assign(kParticleCapacity, 0.0f);
 	
-	m_particleSystem = std::make_unique<ParticleSystem>(
-		kParticleCapacity,
-		m_gridDimensions,
-		true);
+	m_particleSystem = 
+		make_unique<ParticleSystem>(kParticleCapacity, m_gridDimensions, true);
 
 	m_particleSystem->setSimulationDomain(4.0f);
 	m_particleSystem->setDefaultColorRamp();
@@ -33,8 +34,9 @@ bool ParticleSimWorkspace::initialize(
 	return applyRuntimeConfig();
 }
 
-void ParticleSimWorkspace::enter(
-	WorkspaceServices& services) {
+void ParticleSimWorkspace::enter(WorkspaceServices& services) {
+	if (!m_arbiter)
+		m_arbiter = services.arbiter;
 
 	if (!m_initialized) return;
 
@@ -42,59 +44,77 @@ void ParticleSimWorkspace::enter(
 	m_paused = m_particleMode != ParticleMode::Baseline;
 }
 
-void ParticleSimWorkspace::exit(
-	WorkspaceServices& services) {
-
+void ParticleSimWorkspace::exit(WorkspaceServices& services) {
 	m_active = false;
 }
 
-void ParticleSimWorkspace::update(
-	const WorkspaceFrameContext& frame,
-	WorkspaceServices& services) {
-
+void ParticleSimWorkspace::update(const WorkspaceFrameContext& frame, WorkspaceServices& services) {
 	(void)services;
+
 	if (!m_active || !m_particleSystem || m_paused) return;
+
+	if (services.arbiter->isDomainSelection())
+		return;
+
+	if (m_paused) return;
 
 	m_particleSystem->update(frame.deltaTime);
 	m_elapsedSimulationTime += frame.deltaTime;
 }
 
+
+
 void ParticleSimWorkspace::render(
 	const WorkspaceFrameContext& frame,
 	WorkspaceServices& services) {
 
-	(void)frame;
-	if (!m_active || !m_particleSystem || !services.renderer) return;
+	if (!frame.displayEnabled || !services.renderer) return;
 
+	if (services.arbiter && services.arbiter->isDomainSelection()) {
+		renderLayer1DomainBoundary(services);
+		return;
+	}
+
+	/*
 	EuclidRenderer& renderer = *services.renderer;
 
+	const bool layer1 = services.arbiter &&
+		services.arbiter->isDomainSelection();
+	
 	if (m_draftConfig.gridLayout != GridLayout::None) {
+		
 		EuclidRenderer::UniformGrid grid;
 		const uint3 particleGrid = m_particleSystem->getGridSize();
 		const float3 origin = m_particleSystem->getWorldOrigin();
 		const float3 cell = m_particleSystem->getCellSize();
 
-		grid.dimensions = glm::ivec3(
+		grid.dimensions = ivec3(
 			static_cast<int>(particleGrid.x),
 			static_cast<int>(particleGrid.y),
-			static_cast<int>(particleGrid.z));
-		grid.origin = glm::vec3(origin.x, origin.y, origin.z);
-		grid.cellSize = glm::vec3(cell.x, cell.y, cell.z);
+			static_cast<int>(particleGrid.z)
+		);
+
+		grid.origin = vec3(origin.x, origin.y, origin.z);
+		grid.cellSize = vec3(cell.x, cell.y, cell.z);
 		grid.majorEvery = std::max(1, renderer.getGridMajorEvery());
 
 		EuclidRenderer::GridDisplay display;
 		display.boundary = true;
+
 		display.majorGrid =
 			m_draftConfig.gridLayout == GridLayout::Full ||
 			m_draftConfig.gridLayout == GridLayout::Dynamic;
+
 		display.minorGrid = m_draftConfig.gridLayout == GridLayout::Dynamic;
 		display.axes = false;
 
 		renderer.drawUniformGrid(grid, display);
-		const glm::vec3 extent = glm::vec3(grid.dimensions) * grid.cellSize;
+		const vec3 extent = vec3(grid.dimensions) * grid.cellSize;
+
 		renderer.drawAxisGizmo(
 			grid.origin,
-			0.20f * std::max({ extent.x, extent.y, extent.z }));
+			0.20f * std::max({ extent.x, extent.y, extent.z })
+		);
 	}
 
 	const unsigned int activeCount = m_particleSystem->getActiveParticleCount();
@@ -103,19 +123,22 @@ void ParticleSimWorkspace::render(
 	renderer.setParticleSystem(m_particleSystem.get());
 	if (m_radii.size() >= activeCount)
 		renderer.setRadius(m_radii.data(), static_cast<int>(activeCount));
+
 	renderer.setVertexBuffer(
 		m_particleSystem->getCurrentReadBuffer(),
-		static_cast<int>(activeCount));
+		static_cast<int>(activeCount)
+	);
+
 	renderer.setColorBuffer(m_particleSystem->getColorBuffer());
 	renderer.display(EuclidRenderer::PARTICLE_SPHERES);
+	*/
 }
 
 bool ParticleSimWorkspace::handleInput(
 	const WorkspaceInputEvent& input,
 	WorkspaceServices& services) {
 
-	if (!m_active)
-		return false;
+	if (!m_active) return false;
 
 	switch (input.action) {
 	case WorkspaceInputAction::Previous:
@@ -163,55 +186,83 @@ bool ParticleSimWorkspace::handleInput(
 	}
 }
 
+void ParticleSimWorkspace::renderLayer1DomainBoundary(WorkspaceServices& services) const {
+	if (!services.renderer) return;
+
+	EuclidRenderer& renderer = *services.renderer;
+	const float boxSize = static_cast<float>(renderer.getSimBoxSize());
+	const float halfBox = boxSize * 0.5f;
+	const int gridDim = std::max(1, renderer.getGridDimSize());
+
+	EuclidRenderer::UniformGrid grid;
+	grid.dimensions = ivec3(gridDim, gridDim, gridDim);
+	grid.origin = vec3(-halfBox, -halfBox, -halfBox);
+	grid.cellSize = vec3(boxSize / static_cast<float>(gridDim));
+
+	EuclidRenderer::GridDisplay display;
+	display.boundary = true;
+	display.majorGrid = false;
+	display.minorGrid = false;
+	display.axes = false;
+
+	renderer.drawUniformGrid(grid, display);
+}
+
 WorkspacePresentation
-ParticleSimWorkspace::buildPresentation() const {
+ParticleSimWorkspace::buildLayer1Presentation() const {
 
-	WorkspacePresentation presentation;
-	presentation.panelVisible = true;
+	WorkspacePresentation p;
 
-	presentation.workspaceName =
-		"LAYER 1 -> MULPHY_SIM WORKSPACE CONFIGURATION";
-
-	presentation.layerLabel =
-		"MODE: PARTICLE_SIM";
+	p.panelVisible = true;
+	p.workspaceName = "LAYER 1 -> MULPHY_SIM WORKSPACE CONFIGURATION";
+	p.layerLabel = "MODE: PARTICLE_SIM";
 
 	WorkspacePanelSection section;
 
-	WorkspacePanelRow workspaceRow;
-	workspaceRow.label = "[1]: MULPHY_SIM SELECTION";
-	workspaceRow.value = "PARTICLE_SIM";
-	workspaceRow.selectable = true;
-	workspaceRow.selected = m_activeRow == Layer1Row::WorkspaceSelection;
-	section.rows.push_back(workspaceRow);
+	// rows...
 
-	WorkspacePanelRow modeRow;
-	modeRow.label = "[2]: PARTICLE MODE";
-	modeRow.value = particleModeName();
-	modeRow.selectable = true;
-	modeRow.selected = m_activeRow == Layer1Row::ParticleMode;
-	section.rows.push_back(modeRow);
+	p.sections.push_back(section);
 
-	WorkspacePanelRow gridRow;
-	gridRow.label = "[3]: GRID LAYOUT";
-	gridRow.value = gridLayoutName();
-	gridRow.selectable = true;
-	gridRow.selected = m_activeRow == Layer1Row::GridLayout;
-	section.rows.push_back(gridRow);
+	p.statusLine = m_statusLine;
+	p.statusTone = m_statusTone;
 
-	WorkspacePanelRow configureRow;
-	configureRow.label = "[4]: PRESS E TO CONFIGURE SIM";
-	configureRow.selectable = true;
-	configureRow.selected = m_activeRow == Layer1Row::Configure;
-	section.rows.push_back(configureRow);
+	p.footerLine1 =
+		"W/S: Select row    A/D: Change value    E: Configure";
 
-	presentation.sections.push_back(section);
-	presentation.statusLine = m_statusLine;
-	presentation.statusTone = m_statusTone;
-	presentation.footerLine1 = "W/S: Select row    A/D: Change value    E: Configure";
-	presentation.footerLine2 = "Q: Return to Global Shell    ESC: Exit";
+	p.footerLine2 =
+		"Q: Return to Global Shell    ESC: Exit";
 
+	return p;
+}
 
-	return presentation;
+WorkspacePresentation
+ParticleSimWorkspace::buildPresentation() const {
+	if (!m_arbiter) return {};
+
+	switch (m_arbiter->getApplicationLayer()) {
+
+	case TheArbiter::ApplicationLayer::DOMAIN_SELECTION:
+		return buildLayer1Presentation();
+
+	//case TheArbiter::ApplicationLayer::WORKSPACE_CONFIGURATION:
+		//return buildLayer2Presentation();
+
+	//case TheArbiter::ApplicationLayer::ACTIVE_WORKSPACE:
+		//return buildLayer3Presentation();
+
+	default:
+		return {};
+	}
+}
+
+WorkspacePresentation
+ParticleSimWorkspace::buildLayer1TransitionPresentation() const {
+
+	WorkspacePresentation p = buildLayer1Presentation();
+	p.statusLine = "AUTO: Entering MULPHY_SIM Domain...";
+	p.statusTone = WorkspaceStatusTone::Transition;
+
+	return p;
 }
 
 bool ParticleSimWorkspace::applyRuntimeConfig() {
@@ -264,10 +315,7 @@ void ParticleSimWorkspace::moveCursor(int direction) {
 	m_activeRow = static_cast<Layer1Row>((current + step + count) % count);
 }
 
-void ParticleSimWorkspace::adjustSelectedValue(
-	int direction,
-	WorkspaceServices& services) {
-
+void ParticleSimWorkspace::adjustSelectedValue(int direction, WorkspaceServices& services) {
 	if (direction == 0) return;
 
 	switch (m_activeRow) {
