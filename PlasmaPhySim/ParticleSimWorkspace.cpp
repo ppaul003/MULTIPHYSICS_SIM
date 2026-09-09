@@ -1,9 +1,6 @@
 #include "ParticleSimWorkspace.h"
-
 #include "IWorkspaceEM.h"
-
 #include "rendererEM_Euclid.h"
-#include "TheArbiterEM.h"
 
 #include <algorithm>
 #include <cmath>
@@ -62,8 +59,6 @@ void ParticleSimWorkspace::update(const WorkspaceFrameContext& frame, WorkspaceS
 	m_elapsedSimulationTime += frame.deltaTime;
 }
 
-
-
 void ParticleSimWorkspace::render(
 	const WorkspaceFrameContext& frame,
 	WorkspaceServices& services) {
@@ -75,63 +70,6 @@ void ParticleSimWorkspace::render(
 		return;
 	}
 
-	/*
-	EuclidRenderer& renderer = *services.renderer;
-
-	const bool layer1 = services.arbiter &&
-		services.arbiter->isDomainSelection();
-	
-	if (m_draftConfig.gridLayout != GridLayout::None) {
-		
-		EuclidRenderer::UniformGrid grid;
-		const uint3 particleGrid = m_particleSystem->getGridSize();
-		const float3 origin = m_particleSystem->getWorldOrigin();
-		const float3 cell = m_particleSystem->getCellSize();
-
-		grid.dimensions = ivec3(
-			static_cast<int>(particleGrid.x),
-			static_cast<int>(particleGrid.y),
-			static_cast<int>(particleGrid.z)
-		);
-
-		grid.origin = vec3(origin.x, origin.y, origin.z);
-		grid.cellSize = vec3(cell.x, cell.y, cell.z);
-		grid.majorEvery = std::max(1, renderer.getGridMajorEvery());
-
-		EuclidRenderer::GridDisplay display;
-		display.boundary = true;
-
-		display.majorGrid =
-			m_draftConfig.gridLayout == GridLayout::Full ||
-			m_draftConfig.gridLayout == GridLayout::Dynamic;
-
-		display.minorGrid = m_draftConfig.gridLayout == GridLayout::Dynamic;
-		display.axes = false;
-
-		renderer.drawUniformGrid(grid, display);
-		const vec3 extent = vec3(grid.dimensions) * grid.cellSize;
-
-		renderer.drawAxisGizmo(
-			grid.origin,
-			0.20f * std::max({ extent.x, extent.y, extent.z })
-		);
-	}
-
-	const unsigned int activeCount = m_particleSystem->getActiveParticleCount();
-	if (activeCount == 0) return;
-
-	renderer.setParticleSystem(m_particleSystem.get());
-	if (m_radii.size() >= activeCount)
-		renderer.setRadius(m_radii.data(), static_cast<int>(activeCount));
-
-	renderer.setVertexBuffer(
-		m_particleSystem->getCurrentReadBuffer(),
-		static_cast<int>(activeCount)
-	);
-
-	renderer.setColorBuffer(m_particleSystem->getColorBuffer());
-	renderer.display(EuclidRenderer::PARTICLE_SPHERES);
-	*/
 }
 
 bool ParticleSimWorkspace::handleInput(
@@ -215,22 +153,39 @@ ParticleSimWorkspace::buildLayer1Presentation() const {
 
 	p.panelVisible = true;
 	p.workspaceName = "LAYER 1 -> MULPHY_SIM WORKSPACE CONFIGURATION";
-	p.layerLabel = "MODE: PARTICLE_SIM";
+	p.layerLabel = "MODE: PARTICLE_SIMULATION";
 
 	WorkspacePanelSection section;
+	WorkspacePanelRow selectionRow;
 
-	// rows...
+	selectionRow.label = "[1]: MULPHY_SIM SELECTION";
+	selectionRow.value = "PARTICLE_SIMULATION";
+	selectionRow.selectable = true;
+	selectionRow.selected = true;
+	section.rows.push_back(selectionRow);
 
 	p.sections.push_back(section);
 
 	p.statusLine = m_statusLine;
 	p.statusTone = m_statusTone;
 
-	p.footerLine1 =
-		"W/S: Select row    A/D: Change value    E: Configure";
+	p.footerLine1 = "W/S: Select row    A/D: Change value    E: Configure";
+	p.footerLine2 = "Q: Return to Global Shell    ESC: Exit";
 
-	p.footerLine2 =
-		"Q: Return to Global Shell    ESC: Exit";
+	return p;
+}
+
+
+WorkspacePresentation
+ParticleSimWorkspace::buildLayer2Presentation() const {
+	WorkspacePresentation p;
+
+	return p;
+}
+
+WorkspacePresentation
+ParticleSimWorkspace::buildLayer3Presentation() const {
+	WorkspacePresentation p;
 
 	return p;
 }
@@ -244,11 +199,11 @@ ParticleSimWorkspace::buildPresentation() const {
 	case TheArbiter::ApplicationLayer::DOMAIN_SELECTION:
 		return buildLayer1Presentation();
 
-	//case TheArbiter::ApplicationLayer::WORKSPACE_CONFIGURATION:
-		//return buildLayer2Presentation();
+	case TheArbiter::ApplicationLayer::WORKSPACE_CONFIGURATION:
+		return buildLayer2Presentation();
 
-	//case TheArbiter::ApplicationLayer::ACTIVE_WORKSPACE:
-		//return buildLayer3Presentation();
+	case TheArbiter::ApplicationLayer::ACTIVE_WORKSPACE:
+		return buildLayer3Presentation();
 
 	default:
 		return {};

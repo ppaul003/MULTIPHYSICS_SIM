@@ -1,6 +1,10 @@
 #include "CameraEM.h"
 
+#include <GL/glew.h>
+#include <GL/wglew.h>
 #include <GL/freeglut.h>
+
+using namespace std;
 
 namespace {
     constexpr float kMenuX = 1.65f;
@@ -197,7 +201,7 @@ void CameraProcessor::updatePoseTransition(float deltaTime) {
     }
 
     if (rawT >= 1.0f) {
-        for (int c = 0; c < 3; ++c) {
+        for (int c = 0; c < 3; c++) {
             m_cameraTrans[c] = m_poseTargetTrans[c];
             m_cameraTransLag[c] = m_poseTargetTrans[c];
             m_cameraRot[c] = m_poseTargetRot[c];
@@ -206,4 +210,23 @@ void CameraProcessor::updatePoseTransition(float deltaTime) {
         m_poseTransitionElapsed = m_poseTransitionDuration;
         m_poseTransitionActive = false;
     }
+}
+
+void CameraProcessor::orbit(float dx, float dy) {
+    if (!orbitEnabled()) return;
+
+    // Mouse Y -> pitch
+    m_cameraRot[0] += dy / 5.0f;
+
+    // Mouse X -> yaw
+    m_cameraRot[1] += dx / 5.0f;
+}
+
+void CameraProcessor::zoom(float amount) {
+    if (!zoomEnabled()) return;
+
+    const float distance = max(1.0f, fabs(m_cameraTrans[2]));
+
+    m_cameraTrans[2] += amount * distance;
+    m_cameraTrans[2] = clamp(m_cameraTrans[2], -30.0f, -1.5f);
 }

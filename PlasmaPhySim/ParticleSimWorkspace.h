@@ -48,6 +48,15 @@ private:
 		Count
 	};
 
+	enum class Layer2Row {
+		ParticleAmount = 0,
+		ResetMode,
+		Radius,
+		VoxelSpawn,
+		RunSimulation,
+		Count
+	};
+
 	enum class ParticleMode {
 		Baseline = 0,
 		Electromagnetics
@@ -134,8 +143,8 @@ private:
 	};
 	
 	WorkspacePresentation buildLayer1Presentation() const;
-	//WorkspacePresentation buildLayer2Presentation() const;
-	//WorkspacePresentation buildLayer3Presentation() const;
+	WorkspacePresentation buildLayer2Presentation() const;
+	WorkspacePresentation buildLayer3Presentation() const;
 
 	void renderLayer1DomainBoundary(WorkspaceServices& services) const;
 	bool resolveRuntimeConfig(RuntimeConfig& resolved) const;

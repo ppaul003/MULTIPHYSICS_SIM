@@ -94,6 +94,7 @@
     <ClCompile Include="Graph3DWorkspace.cpp" />
     <ClCompile Include="Heat2DWorkspace.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="multiPhysicsSimWorkspace.cpp" />
     <ClCompile Include="ParticleSimWorkspace.cpp" />
     <ClCompile Include="particleSystem.cpp" />
     <ClCompile Include="rendererEM_Euclid.cpp" />
@@ -122,6 +123,7 @@
     <ClInclude Include="IWorkspaceEM.h" />
     <ClInclude Include="kernel_impl.cuh" />
     <ClInclude Include="kernel.h" />
+    <ClInclude Include="multiPhysicsSimWorkspace.h" />
     <ClInclude Include="paramsEM_kernel.cuh" />
     <ClInclude Include="ParticleSimWorkspace.h" />
     <ClInclude Include="particleSystem.h" />

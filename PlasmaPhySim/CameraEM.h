@@ -1,7 +1,8 @@
 #ifndef NDMSM_CAMERA_EM_H
 #define NDMSM_CAMERA_EM_H
 
-#include <GL/glew.h>
+#include <algorithm>
+#include <cmath>
 
 class CameraProcessor {
 public:
@@ -27,6 +28,12 @@ public:
 
     void updatePoseTransition(float deltaTime);
     bool poseTransitionActive() const { return m_poseTransitionActive; }
+
+    void orbit(float dx, float dy);
+    void zoom(float amount);
+
+    bool orbitEnabled() const { return !m_poseTransitionActive && m_behaviorMode == CAM_STANDARD_3D; }
+    bool zoomEnabled() const { return !m_poseTransitionActive && (m_behaviorMode == CAM_STANDARD_3D || m_behaviorMode == CAM_STANDARD_2D); }
 
 private:
     void beginTransitionToPose(

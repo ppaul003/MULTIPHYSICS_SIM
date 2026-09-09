@@ -1,116 +1,40 @@
+#include "kernel.h"
 #include "TheTesseractEM.h"
+
+#include <GL/freeglut.h>
+#include <algorithm>
+#include <cstdio>
+#include <cmath>
+
 #include "CameraEM.h"
 
-#include <cstdio>
-
-bool MultiphysicsSimPlaceholderWorkspace::initialize(WorkspaceServices& services) {
-    m_arbiter = services.arbiter;
-    return m_arbiter != nullptr;
-}
-
-void MultiphysicsSimPlaceholderWorkspace::enter(WorkspaceServices& services) {
-    if (!m_arbiter) m_arbiter = services.arbiter;
-    m_active = true;
-}
-
-void MultiphysicsSimPlaceholderWorkspace::exit(WorkspaceServices& services) {
-    (void)services;
-    m_active = false;
-}
-
-void MultiphysicsSimPlaceholderWorkspace::update(
-    const WorkspaceFrameContext& frame,
-    WorkspaceServices& services) {
-    (void)frame;
-    (void)services;
-}
-
-void MultiphysicsSimPlaceholderWorkspace::render(
-    const WorkspaceFrameContext& frame,
-    WorkspaceServices& services) {
-    (void)frame;
-    (void)services;
-}
-
-bool MultiphysicsSimPlaceholderWorkspace::handleInput(
-    const WorkspaceInputEvent& input,
-    WorkspaceServices& services) {
-
-    if (!m_active) return false;
-    if (!m_arbiter) m_arbiter = services.arbiter;
-    if (!m_arbiter) return false;
-
-    switch (input.action) {
-    case WorkspaceInputAction::Decrease:
-    case WorkspaceInputAction::Increase:
-    case WorkspaceInputAction::Activate:
-        m_arbiter->setActiveWorkspace(
-            TheArbiter::WorkspaceId::PARTICLE_SIMULATION);
-        return true;
-    case WorkspaceInputAction::Back:
-        m_arbiter->requestReturnToGlobalShell(
-            TheArbiter::WorkspaceDomain::MULPHY_SIM);
-        return true;
-    case WorkspaceInputAction::Previous:
-    case WorkspaceInputAction::Next:
-        return true;
-    default:
-        return false;
-    }
-}
-
-WorkspacePresentation
-MultiphysicsSimPlaceholderWorkspace::buildPresentation() const {
-    WorkspacePresentation p;
-    p.panelVisible = true;
-    p.workspaceName = "LAYER 1 -> MULPHY_SIM WORKSPACE CONFIGURATION";
-    p.layerLabel = "MODE: MULTIPHYSICS_SIM";
-
-    WorkspacePanelSection section;
-    WorkspacePanelRow selectionRow;
-    selectionRow.label = "[1]: MULPHY_SIM SELECTION";
-    selectionRow.value = "MULTIPHYSICS_SIM";
-    selectionRow.selectable = true;
-    selectionRow.selected = true;
-    section.rows.push_back(selectionRow);
-
-    WorkspacePanelRow reservedRow;
-    reservedRow.label = "MULTIPHYSICS_SIM is reserved for the next pass";
-    section.rows.push_back(reservedRow);
-    p.sections.push_back(section);
-
-    p.statusLine = "MULTIPHYSICS_SIM is reserved for the next pass";
-    p.statusTone = WorkspaceStatusTone::Warning;
-    p.footerLine1 = "A/D or E: Select PARTICLE_SIM";
-    p.footerLine2 = "Q: Return to Global Shell    ESC: Exit";
-    return p;
-}
+using namespace std;
 
 bool Tesseract::initialize(WorkspaceServices services) {
     m_services = services;
 
     if (!m_diagnosticIdle.initialize(m_services)) {
-        std::printf("[Tesseract] ERROR: DiagnosticIdle initialization failed.\n");
+        printf("[Tesseract] ERROR: DiagnosticIdle initialization failed.\n");
         return false;
     }
 
     if (!m_graph2DWorkspace.initialize(m_services)) {
-        std::printf("[Tesseract] ERROR: Graph2DWorkspace initialization failed.\n");
+        printf("[Tesseract] ERROR: Graph2DWorkspace initialization failed.\n");
         return false;
     }
 
     if (!m_heat2DWorkspace.initialize(m_services)) {
-        std::printf("[Tesseract] ERROR: Heat2DWorkspace initialization failed.\n");
+        printf("[Tesseract] ERROR: Heat2DWorkspace initialization failed.\n");
         return false;
     }
 
     if (!m_graph3DWorkspace.initialize(m_services)) {
-        std::printf("[Tesseract] ERROR: Graph3DWorkspace initialization failed.\n");
+        printf("[Tesseract] ERROR: Graph3DWorkspace initialization failed.\n");
         return false;
     }
 
     if (!m_annDesignWorkspace.initialize(m_services)) {
-        std::printf("[Tesseract] ERROR: ANNDesignWorkspace initialization failed.\n");
+        printf("[Tesseract] ERROR: ANNDesignWorkspace initialization failed.\n");
         return false;
     }
 
@@ -119,8 +43,8 @@ bool Tesseract::initialize(WorkspaceServices services) {
         return false;
     }
 
-    if (!m_multiphysicsPlaceholderWorkspace.initialize(m_services)) {
-        std::printf("[Tesseract] ERROR: MULTIPHYSICS_SIM placeholder initialization failed.\n");
+    if (!m_multiPhySim.initialize(m_services)) {
+        printf("[Tesseract] ERROR: MULTIPHYSICS_SIM placeholder initialization failed.\n");
         return false;
     }
 
@@ -561,7 +485,7 @@ void Tesseract::synchronizeActiveCartridge() {
         else if (m_services.arbiter->getWorkspaceDomain() == Domain::MULPHY_SIM) {
             switch (m_services.arbiter->getActiveWorkspace()) {
             case Workspace::MULTIPHYSICS_SIM:
-                desired = &m_multiphysicsPlaceholderWorkspace;
+                desired = &m_multiPhySim;
                 desiredName = "MULTIPHYSICS_SIM";
                 break;
             case Workspace::PARTICLE_SIMULATION:

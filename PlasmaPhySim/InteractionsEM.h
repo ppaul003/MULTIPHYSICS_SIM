@@ -1,7 +1,13 @@
 #ifndef NDMSM_INTERACTIONS_EM_H
 #define NDMSM_INTERACTIONS_EM_H
 
+#include <GL/glew.h>
+#include <GL/wglew.h>
+#include <GL/freeglut.h>
+
 #include <cctype>
+#include <cmath>
+
 
 class KeyboardInput {
 public:
@@ -54,4 +60,44 @@ private:
     }
 };
 
+
+class MouseInput {
+public:
+    void onButton(
+        int button,
+        int state,
+        int x,
+        int y) {
+
+        if (button != GLUT_LEFT_BUTTON)
+            return;
+
+        m_leftDown =
+            state == GLUT_DOWN;
+
+        m_lastX = x;
+        m_lastY = y;
+    }
+
+    bool onMotion(
+        int x,
+        int y,
+        int& dx,
+        int& dy) {
+
+        dx = x - m_lastX;
+        dy = y - m_lastY;
+
+        m_lastX = x;
+        m_lastY = y;
+
+        return m_leftDown;
+    }
+
+private:
+    bool m_leftDown = false;
+
+    int m_lastX = 0;
+    int m_lastY = 0;
+};
 #endif

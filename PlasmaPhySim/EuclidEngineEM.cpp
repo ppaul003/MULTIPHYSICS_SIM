@@ -7,7 +7,6 @@
 #endif
 
 #include <vector>
-#include <cstdio>
 #include <chrono>
 #include <fstream>
 #include <string>
@@ -168,6 +167,8 @@ bool EuclidEngine::init(int argc, char** argv) {
     glutDisplayFunc(&EuclidEngine::sDisplay);
     glutReshapeFunc(&EuclidEngine::sReshape);
     glutKeyboardFunc(&EuclidEngine::sKeyboard);
+    glutMouseFunc(&EuclidEngine::sMouse);
+    glutMotionFunc(&EuclidEngine::sMotion);
     glutIdleFunc(&EuclidEngine::sIdle);
     glutCloseFunc(&EuclidEngine::sClose);
 
@@ -292,6 +293,18 @@ void EuclidEngine::sKeyboard(unsigned char key, int x, int y) {
     if (s_instance) s_instance->onKeyboard(key, x, y);
 }
 
+void EuclidEngine::sMouse(int button, int state, int x, int y) {
+
+    if (s_instance)
+        s_instance->onMouse(button, state, x, y);
+}
+
+void EuclidEngine::sMotion(int x, int y) {
+
+    if (s_instance)
+        s_instance->onMotion(x, y);
+}
+
 void EuclidEngine::sIdle() {
     if (s_instance) s_instance->onIdle();
 }
@@ -341,6 +354,58 @@ void EuclidEngine::onKeyboard(unsigned char key, int x, int y) {
         m_tesseract.handleInput(result.workspaceInput);
         glutPostRedisplay();
     }
+}
+
+void EuclidEngine::onMouse(int button, int state, int x, int y) {
+
+    m_mouse.onButton(button, state, x, y);
+
+    // Never manipulate camera during automatic transition.
+    if (m_tesseract.domainTransitionActive())
+        return;
+
+    // This sprint: camera interaction belongs to Layer 1.
+    if (!m_arbiter.isDomainSelection())
+        return;
+
+    // FreeGLUT wheel up/down.
+    if (state == GLUT_DOWN) {
+
+        if (button == 3 && m_camera.zoomEnabled()) {
+            m_camera.zoom(+0.05f);
+        }
+
+        else if (button == 4 && m_camera.zoomEnabled()) {
+            m_camera.zoom(-0.05f);
+        }
+    }
+
+    glutPostRedisplay();
+}
+
+void EuclidEngine::onMotion(int x, int y) {
+
+    int dx = 0;
+    int dy = 0;
+
+    if (!m_mouse.onMotion(x, y, dx, dy))
+        return;
+
+    if (m_tesseract.domainTransitionActive())
+        return;
+
+    if (!m_arbiter.isDomainSelection())
+        return;
+
+    if (!m_camera.orbitEnabled())
+        return;
+
+    m_camera.orbit(
+        static_cast<float>(dx),
+        static_cast<float>(dy)
+    );
+
+    glutPostRedisplay();
 }
 
 void EuclidEngine::onIdle() {
