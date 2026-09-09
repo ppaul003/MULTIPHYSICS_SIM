@@ -12,41 +12,41 @@ using namespace glm;
 
 namespace {
 
-constexpr float kRadiusPresets[] = {
-	0.0039f,
-	0.0046f,
-	0.0054f,
-	0.0061f,
-	0.0068f,
-	0.0076f,
-	0.0083f,
-	0.0091f,
-	0.0098f,
-	0.0105f,
-	0.0113f,
-	0.0120f,
-	0.0127f,
-	0.0135f,
-	0.0142f,
-	0.0149f,
-	0.0156f
-};
+	constexpr float kRadiusPresets[] = {
+		0.0039f,
+		0.0046f,
+		0.0054f,
+		0.0061f,
+		0.0068f,
+		0.0076f,
+		0.0083f,
+		0.0091f,
+		0.0098f,
+		0.0105f,
+		0.0113f,
+		0.0120f,
+		0.0127f,
+		0.0135f,
+		0.0142f,
+		0.0149f,
+		0.0156f
+	};
 
-constexpr int kRadiusPresetCount =
-	static_cast<int>(sizeof(kRadiusPresets) / sizeof(kRadiusPresets[0]));
+	constexpr int kRadiusPresetCount =
+		static_cast<int>(sizeof(kRadiusPresets) / sizeof(kRadiusPresets[0]));
 
-WorkspacePanelRow makeRow(
-	const string& label,
-	const string& value,
-	bool selected) {
+	WorkspacePanelRow makeRow(
+		const string& label,
+		const string& value,
+		bool selected) {
 
-	WorkspacePanelRow row;
-	row.label = label;
-	row.value = value;
-	row.selectable = true;
-	row.selected = selected;
-	return row;
-}
+		WorkspacePanelRow row;
+		row.label = label;
+		row.value = value;
+		row.selectable = true;
+		row.selected = selected;
+		return row;
+	}
 
 } // namespace
 
@@ -55,8 +55,14 @@ bool ParticleSimWorkspace::initialize(WorkspaceServices& services) {
 	if (!services.renderer || !services.arbiter) return false;
 
 	m_arbiter = services.arbiter;
-	m_baseVoxelGrid.dimensions = ivec3(8, 8, 8);
-	m_baseVoxelGrid.origin = vec3(-2.0f, -2.0f, -2.0f);
+
+	m_baseVoxelGrid.dimensions = ivec3(
+		kMajorGridEvery, 
+		kMajorGridEvery, 
+		kMajorGridEvery
+	);
+
+	m_baseVoxelGrid.origin = vec3(-kSimHalfBoxM, -kSimHalfBoxM, -kSimHalfBoxM);
 	m_baseVoxelGrid.voxelEdgeM = 0.5f;
 	m_radii.assign(kParticleCapacity, 0.0f);
 
@@ -65,7 +71,8 @@ bool ParticleSimWorkspace::initialize(WorkspaceServices& services) {
 		m_gridDimensions,
 		true
 	);
-	m_particleSystem->setSimulationDomain(kSimulationBoxSizeM);
+
+	m_particleSystem->setSimulationDomain(kSimBoxSizeM);
 	if (!m_particleSystem->setActiveParticleCount(0)) return false;
 
 	m_initialized = true;
@@ -116,7 +123,9 @@ void ParticleSimWorkspace::render(
 	const WorkspaceFrameContext& frame,
 	WorkspaceServices& services) {
 
-	if (!frame.displayEnabled || !services.renderer || !services.arbiter) {
+	if (!frame.displayEnabled ||
+		!services.renderer ||
+		!services.arbiter) {
 		return;
 	}
 
@@ -201,7 +210,7 @@ bool ParticleSimWorkspace::handleLayer1Input(
 				m_paused = true;
 				m_runtimeEnabled = false;
 				m_textEntry.cancel();
-				m_statusLine = "READY: PARTICLE_SIM workspace configuration.";
+				m_statusLine = "READY: PARTICLE_SIM Workspace Configuration.";
 				m_statusTone = WorkspaceStatusTone::Ready;
 				services.arbiter->setApplicationLayer(
 					TheArbiter::ApplicationLayer::WORKSPACE_CONFIGURATION
@@ -404,21 +413,20 @@ bool ParticleSimWorkspace::handleTextEntry(
 }
 
 void ParticleSimWorkspace::renderConfiguredGrid(
-	WorkspaceServices& services,
-	GridLayout layout) const {
+	WorkspaceServices& services, GridLayout layout) const {
 
 	if (!services.renderer) return;
 
 	EuclidRenderer::UniformGrid grid;
+
 	grid.dimensions = ivec3(
 		static_cast<int>(kGridSize),
 		static_cast<int>(kGridSize),
 		static_cast<int>(kGridSize)
 	);
+
 	grid.origin = m_baseVoxelGrid.origin;
-	grid.cellSize = vec3(
-		kSimulationBoxSizeM / static_cast<float>(kGridSize)
-	);
+	grid.cellSize = vec3(kCellSizeM, kCellSizeM, kCellSizeM);
 	grid.majorEvery = static_cast<int>(kMajorGridEvery);
 
 	EuclidRenderer::GridDisplay display;
@@ -482,37 +490,45 @@ void ParticleSimWorkspace::renderActiveParticles(
 }
 
 WorkspacePresentation ParticleSimWorkspace::buildLayer1Presentation() const {
+	
 	WorkspacePresentation p;
+
 	p.panelVisible = true;
 	p.workspaceName = "LAYER 1 -> MULPHY_SIM WORKSPACE CONFIGURATION";
 	p.layerLabel = "MODE: PARTICLE_SIM";
 
 	WorkspacePanelSection section;
+
 	section.rows.push_back(makeRow(
 		"[1]: MULPHY_SIM SELECTION",
 		"PARTICLE_SIM",
 		m_layer1Selection == Layer1Row::WorkspaceSelection
 	));
+
 	section.rows.push_back(makeRow(
 		"[2]: GRID LAYOUT",
 		gridLayoutName(),
 		m_layer1Selection == Layer1Row::GridLayout
 	));
+
 	section.rows.push_back(makeRow(
 		"[3]: COLOR MODE",
 		colorModeName(),
 		m_layer1Selection == Layer1Row::ColorMode
 	));
+
 	section.rows.push_back(makeRow(
 		"[4]: PARTICLE RADIUS",
 		radiusModeName(),
 		m_layer1Selection == Layer1Row::RadiusMode
 	));
+
 	section.rows.push_back(makeRow(
 		"[5]: PRESS E TO CONFIGURE WORKSPACE",
 		"",
 		m_layer1Selection == Layer1Row::Configure
 	));
+
 	p.sections.push_back(section);
 
 	p.statusLine = m_statusLine;
@@ -782,12 +798,10 @@ bool ParticleSimWorkspace::applyRuntimeConfig() {
 	return true;
 }
 
-bool ParticleSimWorkspace::resolveRuntimeConfig(
-	RuntimeConfig& resolved) const {
+bool ParticleSimWorkspace::resolveRuntimeConfig(RuntimeConfig& resolved) const {
 
 	if (m_draftConfig.gridLayout == GridLayout::Dynamic ||
-		m_draftConfig.spawnVoxelId >=
-			m_spawnDensityGrid.regionCount(m_baseVoxelGrid)) {
+		m_draftConfig.spawnVoxelId >= m_spawnDensityGrid.regionCount(m_baseVoxelGrid)) {
 		return false;
 	}
 
@@ -801,13 +815,13 @@ bool ParticleSimWorkspace::resolveRuntimeConfig(
 	if (requestedCount > m_capacity) return false;
 
 	const bool uniformRadiusValid =
-		std::isfinite(m_draftConfig.uniformRadius) &&
+		isfinite(m_draftConfig.uniformRadius) &&
 		m_draftConfig.uniformRadius > 0.0f &&
 		m_draftConfig.uniformRadius <= kMaximumSupportedRadius;
 
 	const bool randomRadiusValid =
-		std::isfinite(m_draftConfig.minimumRadius) &&
-		std::isfinite(m_draftConfig.maximumRadius) &&
+		isfinite(m_draftConfig.minimumRadius) &&
+		isfinite(m_draftConfig.maximumRadius) &&
 		m_draftConfig.minimumRadius > 0.0f &&
 		m_draftConfig.minimumRadius <= m_draftConfig.maximumRadius &&
 		m_draftConfig.maximumRadius <= kMaximumSupportedRadius;
@@ -827,10 +841,12 @@ bool ParticleSimWorkspace::resolveRuntimeConfig(
 	resolved.uniformRadius = m_draftConfig.uniformRadius;
 	resolved.minimumRadius = m_draftConfig.minimumRadius;
 	resolved.maximumRadius = m_draftConfig.maximumRadius;
+
 	resolved.placementRadius =
 		m_draftConfig.radiusMode == RadiusMode::Random
 		? m_draftConfig.maximumRadius
 		: m_draftConfig.uniformRadius;
+
 	resolved.colorMode = m_draftConfig.colorMode;
 	resolved.radiusMode = m_draftConfig.radiusMode;
 	resolved.resetMode = m_draftConfig.resetMode;
@@ -890,7 +906,6 @@ void ParticleSimWorkspace::adjustLayer1Value(
 		);
 		break;
 	}
-
 	case Layer1Row::ColorMode:
 		m_draftConfig.colorMode =
 			m_draftConfig.colorMode == ColorMode::Default
@@ -959,8 +974,7 @@ void ParticleSimWorkspace::adjustLayer2Value(int direction) {
 			? ResetMode::Random
 			: ResetMode::Default;
 	}
-	else if (m_draftConfig.radiusMode == RadiusMode::Uniform &&
-		m_layer2Selection == 2) {
+	else if (m_draftConfig.radiusMode == RadiusMode::Uniform && m_layer2Selection == 2) {
 		const int index = std::clamp(
 			radiusPresetIndex(m_draftConfig.uniformRadius) + step,
 			0,
@@ -968,16 +982,15 @@ void ParticleSimWorkspace::adjustLayer2Value(int direction) {
 		);
 		m_draftConfig.uniformRadius = radiusPreset(index);
 	}
-	else if (m_draftConfig.radiusMode == RadiusMode::Random &&
-		m_layer2Selection == 2) {
+	else if (m_draftConfig.radiusMode == RadiusMode::Random && m_layer2Selection == 2) {
 		const int current = radiusPresetIndex(m_draftConfig.minimumRadius);
 		const int maximum = radiusPresetIndex(m_draftConfig.maximumRadius);
 		m_draftConfig.minimumRadius = radiusPreset(
 			std::clamp(current + step, 0, maximum)
 		);
 	}
-	else if (m_draftConfig.radiusMode == RadiusMode::Random &&
-		m_layer2Selection == 3) {
+	else if (m_draftConfig.radiusMode == RadiusMode::Random && m_layer2Selection == 3) {
+		
 		const int current = radiusPresetIndex(m_draftConfig.maximumRadius);
 		const int minimum = radiusPresetIndex(m_draftConfig.minimumRadius);
 		m_draftConfig.maximumRadius = radiusPreset(
@@ -985,9 +998,11 @@ void ParticleSimWorkspace::adjustLayer2Value(int direction) {
 		);
 	}
 	else if (m_layer2Selection == voxelSpawnRowIndex()) {
+
 		const int count = static_cast<int>(
 			m_spawnDensityGrid.regionCount(m_baseVoxelGrid)
 		);
+
 		const int current = static_cast<int>(m_draftConfig.spawnVoxelId);
 		m_draftConfig.spawnVoxelId = static_cast<unsigned int>(
 			(current + step + count) % count
@@ -1027,8 +1042,8 @@ void ParticleSimWorkspace::beginParticleAmountEntry() {
 		"PARTICLE AMOUNT",
 		0,
 		maximum,
-		initial
-	)) {
+		initial)) {
+
 		m_statusLine = "ENTER RGB particle amount; E/ENTER commits.";
 		m_statusTone = WorkspaceStatusTone::Neutral;
 	}
@@ -1142,7 +1157,9 @@ const char* ParticleSimWorkspace::gridLayoutName() const {
 }
 
 const char* ParticleSimWorkspace::colorModeName() const {
-	return m_draftConfig.colorMode == ColorMode::RGB ? "RGB" : "DEFAULT";
+	return m_draftConfig.colorMode == ColorMode::RGB 
+		? "RGB" 
+		: "DEFAULT";
 }
 
 const char* ParticleSimWorkspace::radiusModeName() const {

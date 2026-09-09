@@ -143,39 +143,46 @@ private:
 		const WorkspaceInputEvent& input,
 		WorkspaceServices& services
 	);
+
 	bool handleLayer2Input(
 		const WorkspaceInputEvent& input,
 		WorkspaceServices& services
 	);
+
 	bool handleLayer3Input(
 		const WorkspaceInputEvent& input,
 		WorkspaceServices& services
 	);
-	bool handleTextEntry(const WorkspaceInputEvent& input);
 
+	bool handleTextEntry(const WorkspaceInputEvent& input);
 	bool resolveRuntimeConfig(RuntimeConfig& resolved) const;
 	bool applyRuntimeConfig();
 
 	void moveLayer1Cursor(int direction);
 	void moveLayer2Cursor(int direction);
 	void moveLayer3Cursor(int direction);
+
 	void adjustLayer1Value(int direction, WorkspaceServices& services);
 	void adjustLayer2Value(int direction);
 	void adjustLayer3Value(int direction);
+
 	void beginParticleAmountEntry();
+	void setSelectedColorCount(unsigned int value);
+
+	static int radiusPresetIndex(float radius);
+
+	unsigned int selectedColorCount() const;
+	unsigned int otherColorCount() const;
+	unsigned int requestedParticleCount() const;
+
+	bool isVoxelSpawnRowSelected() const;
 
 	int layer2RowCount() const;
 	int voxelSpawnRowIndex() const;
 	int runSimulationRowIndex() const;
-	bool isVoxelSpawnRowSelected() const;
 
-	unsigned int selectedColorCount() const;
-	unsigned int otherColorCount() const;
-	void setSelectedColorCount(unsigned int value);
-	unsigned int requestedParticleCount() const;
-
-	static int radiusPresetIndex(float radius);
 	static float radiusPreset(int index);
+
 	static std::string radiusText(float radius);
 	static std::string voxelText(unsigned int voxelId);
 
@@ -187,21 +194,26 @@ private:
 	const char* layer3CameraViewName() const;
 
 private:
-	static constexpr float kSimulationBoxSizeM = 4.0f;
+	static constexpr float kSimBoxSizeM = 4.0f;
+	static constexpr float kSimHalfBoxM = kSimBoxSizeM * 0.5f;
 	static constexpr float kMaximumSupportedRadius = 0.0156f;
 	static constexpr unsigned int kParticleCapacity = 16384;
-	static constexpr unsigned int kGridSize = 64;
 	static constexpr unsigned int kMajorGridEvery = 8;
+	static constexpr unsigned int kGridSize = 64;
 	static constexpr unsigned int kDefaultCountStep = 100;
 	static constexpr unsigned int kResetSeed = 1973;
+	static constexpr float kCellSizeM = 
+		kSimBoxSizeM / static_cast<float>(kGridSize);
 
 	unsigned int m_capacity = kParticleCapacity;
 	unsigned int m_activeCount = 0;
+
 	uint3 m_gridDimensions = make_uint3(kGridSize, kGridSize, kGridSize);
 
 	std::unique_ptr<ParticleSystem> m_particleSystem;
+	std::string m_statusLine = "READY: CUDA PARTICLE BASELINE.";
 	std::vector<float> m_radii;
-
+	
 	TheArbiter* m_arbiter = nullptr;
 	DraftConfig m_draftConfig;
 	RuntimeConfig m_runtimeConfig;
@@ -210,19 +222,18 @@ private:
 	TextEntrySession m_textEntry;
 
 	Layer1Row m_layer1Selection = Layer1Row::WorkspaceSelection;
-	int m_layer2Selection = 0;
-	bool m_subLayerPanelOpen = false;
 	Layer3Row m_layer3Selection = Layer3Row::DisplaySliders;
-	bool m_displaySliders = false;
 	Layer3CameraView m_layer3CameraView = Layer3CameraView::Orbit;
-
-	std::string m_statusLine = "READY: CUDA PARTICLE BASELINE.";
 	WorkspaceStatusTone m_statusTone = WorkspaceStatusTone::Ready;
-
+	
+	bool m_subLayerPanelOpen = false;
+	bool m_displaySliders = false;
 	bool m_initialized = false;
 	bool m_active = false;
 	bool m_paused = true;
 	bool m_runtimeEnabled = false;
+
+	int m_layer2Selection = 0;
 
 	float m_elapsedSimulationTime = 0.0f;
 };

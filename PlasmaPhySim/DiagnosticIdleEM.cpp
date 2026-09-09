@@ -6,6 +6,7 @@
 #include <cmath>
 #include <string>
 
+using namespace std;
 using namespace glm;
 
 bool DiagnosticIdle::initialize(WorkspaceServices& services) {
@@ -14,10 +15,9 @@ bool DiagnosticIdle::initialize(WorkspaceServices& services) {
 
     m_transitionGridDimension = std::max(1, services.renderer->getGridDimSize());
     m_transitionGridMajorEvery = std::max(1, services.renderer->getGridMajorEvery());
-    m_mulphyMajorCount = std::max(
-        1,
-        (m_transitionGridDimension + m_transitionGridMajorEvery - 1) /
-        m_transitionGridMajorEvery);
+    m_mulphyMajorCount = std::max(1, 
+        (m_transitionGridDimension + m_transitionGridMajorEvery - 1) /  m_transitionGridMajorEvery);
+
     return true;
 }
 

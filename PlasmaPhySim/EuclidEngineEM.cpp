@@ -151,7 +151,7 @@ EuclidEngine::~EuclidEngine() {
 
 bool EuclidEngine::init(int argc, char** argv) {
     std::printf("Anaheim Systems Dynamics\n");
-    std::printf("NDMSM System starting...\n");
+    std::printf("NDMMS System starting...\n");
     std::printf("Diagnostic + GRID_2D/GRID_3D transition host only.\n\n");
 
     s_instance = this;
@@ -274,7 +274,7 @@ void EuclidEngine::computeFPS() {
         static_cast<float>(elapsed);
 
     char title[128];
-    std::snprintf(title, sizeof(title), "NDMSM Sytem Ver0.0.0 : %.1f fps", fps);
+    std::snprintf(title, sizeof(title), "NDMMS Sytem Ver0.0.0 : %.1f fps", fps);
     glutSetWindowTitle(title);
 
     frameCount = 0;
