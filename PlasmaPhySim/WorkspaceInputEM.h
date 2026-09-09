@@ -8,11 +8,13 @@ enum class WorkspaceInputAction {
     Decrease,
     Increase,
     Activate,
-    Back
+    Back,
+    RawKey
 };
 
 struct WorkspaceInputEvent {
     WorkspaceInputAction action = WorkspaceInputAction::None;
+    unsigned char rawKey = 0;
     int x = 0;
     int y = 0;
 };

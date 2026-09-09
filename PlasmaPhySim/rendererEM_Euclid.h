@@ -196,6 +196,49 @@ public:
 		const glm::vec3& halfExtent
 	);
 
+	void drawHighlightedVoxel(
+		const glm::vec3& center,
+		const glm::vec3& halfExtent
+	) {
+		const glm::vec3 minimum = center - halfExtent;
+		const glm::vec3 maximum = center + halfExtent;
+
+		glUseProgram(0);
+		glLineWidth(3.0f);
+		glColor4f(1.0f, 0.5f, 0.0f, 1.0f);
+		glBegin(GL_LINES);
+
+		glVertex3f(minimum.x, minimum.y, minimum.z);
+		glVertex3f(maximum.x, minimum.y, minimum.z);
+		glVertex3f(minimum.x, maximum.y, minimum.z);
+		glVertex3f(maximum.x, maximum.y, minimum.z);
+		glVertex3f(minimum.x, minimum.y, maximum.z);
+		glVertex3f(maximum.x, minimum.y, maximum.z);
+		glVertex3f(minimum.x, maximum.y, maximum.z);
+		glVertex3f(maximum.x, maximum.y, maximum.z);
+
+		glVertex3f(minimum.x, minimum.y, minimum.z);
+		glVertex3f(minimum.x, maximum.y, minimum.z);
+		glVertex3f(maximum.x, minimum.y, minimum.z);
+		glVertex3f(maximum.x, maximum.y, minimum.z);
+		glVertex3f(minimum.x, minimum.y, maximum.z);
+		glVertex3f(minimum.x, maximum.y, maximum.z);
+		glVertex3f(maximum.x, minimum.y, maximum.z);
+		glVertex3f(maximum.x, maximum.y, maximum.z);
+
+		glVertex3f(minimum.x, minimum.y, minimum.z);
+		glVertex3f(minimum.x, minimum.y, maximum.z);
+		glVertex3f(maximum.x, minimum.y, minimum.z);
+		glVertex3f(maximum.x, minimum.y, maximum.z);
+		glVertex3f(minimum.x, maximum.y, minimum.z);
+		glVertex3f(minimum.x, maximum.y, maximum.z);
+		glVertex3f(maximum.x, maximum.y, minimum.z);
+		glVertex3f(maximum.x, maximum.y, maximum.z);
+
+		glEnd();
+		glLineWidth(1.0f);
+	}
+
 private:
 	void _initGL();
 	void _initialize();

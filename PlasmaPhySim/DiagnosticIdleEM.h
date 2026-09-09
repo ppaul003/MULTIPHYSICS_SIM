@@ -88,13 +88,11 @@ private:
     static constexpr float kMulphyMajorHoldDuration = 0.12f;
     static constexpr float kMulphyAxisTransitionDuration = 0.45f;
 
-    GlobalShellRow m_activeShellRow = GlobalShellRow::Environment;
     TheArbiter* m_arbiter = nullptr;
 
-    int m_requestedSimBoxSize = 4;
-
+    GlobalShellRow m_activeShellRow = GlobalShellRow::Environment;
     VisualTransitionState m_visualTransition = VisualTransitionState::Idle;
-
+    
     bool m_grid3DEnterComplete = false;
     bool m_grid3DReturnComplete = false;
     bool m_grid2DEnterComplete = false;
@@ -111,6 +109,8 @@ private:
     float m_mulphyClearedProgress = 0.0f;
     float m_mulphyAxisProgress = 0.0f;
     float m_mulphyMajorHoldElapsed = 0.0f;
+
+    int m_requestedSimBoxSize = 4;
     int m_transitionGridDimension = 64;
     int m_transitionGridMajorEvery = 8;
     int m_mulphyMajorCount = 8;

@@ -932,6 +932,106 @@ void ParticleSystem::reset(ParticleConfig config) {
 	setArray(VELOCITY, m_hVel, 0, activeCount);
 	setArray(ACCELERATION, m_hAcc, 0, activeCount);
 }
+
+bool ParticleSystem::resetInBounds(
+	ParticleConfig config,
+	const float3& minimum,
+	const float3& maximum,
+	float placementRadius,
+	uint seed) {
+
+	if (!m_bInitialized ||
+		config < CNFG_DEFAULT_RESTART ||
+		config >= _NUM_CONFIGS ||
+		!std::isfinite(minimum.x) ||
+		!std::isfinite(minimum.y) ||
+		!std::isfinite(minimum.z) ||
+		!std::isfinite(maximum.x) ||
+		!std::isfinite(maximum.y) ||
+		!std::isfinite(maximum.z) ||
+		!std::isfinite(placementRadius) ||
+		placementRadius <= 0.0f) {
+		return false;
+	}
+
+	const float3 lower = make_float3(
+		minimum.x + placementRadius,
+		minimum.y + placementRadius,
+		minimum.z + placementRadius
+	);
+	const float3 upper = make_float3(
+		maximum.x - placementRadius,
+		maximum.y - placementRadius,
+		maximum.z - placementRadius
+	);
+
+	if (lower.x > upper.x || lower.y > upper.y || lower.z > upper.z) {
+		return false;
+	}
+
+	const uint activeCount = m_activeParticleCount;
+	m_params.particleRadius = placementRadius;
+	m_params.numBodies = activeCount;
+	setParameters(&m_params);
+
+	if (activeCount == 0) {
+		return true;
+	}
+
+	if (config == CNFG_DEFAULT_RESTART) {
+		const uint side = static_cast<uint>(
+			ceilf(cbrtf(static_cast<float>(activeCount)))
+		);
+
+		for (uint i = 0; i < activeCount; ++i) {
+			const uint x = i % side;
+			const uint y = (i / side) % side;
+			const uint z = i / (side * side);
+
+			const float fx = (static_cast<float>(x) + 0.5f) /
+				static_cast<float>(side);
+			const float fy = (static_cast<float>(y) + 0.5f) /
+				static_cast<float>(side);
+			const float fz = (static_cast<float>(z) + 0.5f) /
+				static_cast<float>(side);
+
+			m_hPos[i * 4] = lower.x + fx * (upper.x - lower.x);
+			m_hPos[i * 4 + 1] = lower.y + fy * (upper.y - lower.y);
+			m_hPos[i * 4 + 2] = lower.z + fz * (upper.z - lower.z);
+			m_hPos[i * 4 + 3] = 1.0f;
+		}
+	}
+	else {
+		std::mt19937 generator(seed);
+		std::uniform_real_distribution<float> distributionX(lower.x, upper.x);
+		std::uniform_real_distribution<float> distributionY(lower.y, upper.y);
+		std::uniform_real_distribution<float> distributionZ(lower.z, upper.z);
+
+		for (uint i = 0; i < activeCount; ++i) {
+			m_hPos[i * 4] = distributionX(generator);
+			m_hPos[i * 4 + 1] = distributionY(generator);
+			m_hPos[i * 4 + 2] = distributionZ(generator);
+			m_hPos[i * 4 + 3] = 1.0f;
+		}
+	}
+
+	for (uint i = 0; i < activeCount; ++i) {
+		m_hVel[i * 4] = 0.0f;
+		m_hVel[i * 4 + 1] = 0.0f;
+		m_hVel[i * 4 + 2] = 0.0f;
+		m_hVel[i * 4 + 3] = placementRadius;
+
+		m_hAcc[i * 4] = 0.0f;
+		m_hAcc[i * 4 + 1] = 0.0f;
+		m_hAcc[i * 4 + 2] = 0.0f;
+		m_hAcc[i * 4 + 3] = 0.0f;
+	}
+
+	setArray(POSITION, m_hPos, 0, activeCount);
+	setArray(VELOCITY, m_hVel, 0, activeCount);
+	setArray(ACCELERATION, m_hAcc, 0, activeCount);
+	return true;
+}
 ParticleProxy3D ParticleSystem::getSingleParticleProxy(uint index) {
 	ParticleProxy3D p;
 

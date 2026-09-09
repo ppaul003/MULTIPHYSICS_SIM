@@ -5,6 +5,7 @@ TheArbiter::TheArbiter() = default;
 TheArbiter::ArbiterResult
 TheArbiter::routeKeyboard(const KeyboardInput::KeyEvent& event) const {
     ArbiterResult result;
+    result.workspaceInput.rawKey = event.rawKey;
     result.workspaceInput.x = event.x;
     result.workspaceInput.y = event.y;
 
@@ -35,7 +36,13 @@ TheArbiter::routeKeyboard(const KeyboardInput::KeyEvent& event) const {
         result.workspaceInput.action = WorkspaceInputAction::Back;
         break;
     default:
-        result.workspaceInput.action = WorkspaceInputAction::None;
+        if ((event.rawKey >= '0' && event.rawKey <= '9') ||
+            event.rawKey == 8 || event.rawKey == 127) {
+            result.workspaceInput.action = WorkspaceInputAction::RawKey;
+        }
+        else {
+            result.workspaceInput.action = WorkspaceInputAction::None;
+        }
         break;
     }
 

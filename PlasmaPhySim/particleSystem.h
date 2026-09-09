@@ -85,6 +85,13 @@ public:
 	
 	void update(float deltaTime);
 	void reset(ParticleConfig config);
+	bool resetInBounds(
+		ParticleConfig config,
+		const float3& minimum,
+		const float3& maximum,
+		float placementRadius,
+		uint seed = 1973
+	);
 	void setDefaultColorRamp();
 	bool setRGBParticleCounts(
 		uint redCount,
