@@ -9,7 +9,9 @@ enum class WorkspaceInputAction {
     Increase,
     Activate,
     Back,
-    RawKey
+    RawKey,
+    TogglePanel,
+    TogglePause
 };
 
 struct WorkspaceInputEvent {

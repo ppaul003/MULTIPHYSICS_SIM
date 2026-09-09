@@ -34,10 +34,13 @@ private:
     void drawText2D(float x, float y, const char* text, void* font);
 
     void updatePanelAnimation(bool visible);
+    void updateSubLayerPanelAnimation(bool visible);
     float panelOffsetX() const;
     float panelX(float x) const { return x + panelOffsetX(); }
 
     void drawWorkspaceFrame(const WorkspacePresentation& presentation);
+    void drawRuntimeStatusPanel(const WorkspaceRuntimeStatus& status);
+    void drawSubLayerPresentation(const WorkspacePresentation& presentation);
     void drawPanelBackground();
     void drawHeader(const WorkspacePresentation& presentation);
     void drawSections(const WorkspacePresentation& presentation);
@@ -52,6 +55,7 @@ private:
     float m_margin = 42.0f;
     float m_rowSpacing = 55.0f;
     float m_panelSlide = 1.0f;
+    float m_subLayerPanelSlide = 0.0f;
 };
 
 #endif

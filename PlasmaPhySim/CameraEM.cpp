@@ -40,7 +40,7 @@ CameraProcessor::CameraProcessor() :
 void CameraProcessor::updateLag() {
     if (m_poseTransitionActive) return;
 
-    for (int c = 0; c < 3; ++c) {
+    for (int c = 0; c < 3; c++) {
         m_cameraTransLag[c] +=
             (m_cameraTrans[c] - m_cameraTransLag[c]) * kInertia;
         m_cameraRotLag[c] +=
@@ -108,7 +108,7 @@ void CameraProcessor::beginTransitionToPose(
     float rx, float ry, float rz,
     float duration) {
 
-    for (int c = 0; c < 3; ++c) {
+    for (int c = 0; c < 3; c++) {
         m_poseStartTrans[c] = m_cameraTransLag[c];
         m_poseStartRot[c] = m_cameraRotLag[c];
         m_cameraTrans[c] = m_poseStartTrans[c];
@@ -126,7 +126,7 @@ void CameraProcessor::beginTransitionToPose(
     m_poseTransitionDuration = duration;
 
     if (duration <= 0.0f) {
-        for (int c = 0; c < 3; ++c) {
+        for (int c = 0; c < 3; c++) {
             m_cameraTrans[c] = m_poseTargetTrans[c];
             m_cameraRot[c] = m_poseTargetRot[c];
             m_cameraTransLag[c] = m_poseTargetTrans[c];
@@ -143,7 +143,8 @@ void CameraProcessor::beginTransitionToStandard3D(float duration) {
     beginTransitionToPose(
         0.0f, 0.0f, kStandard3DZ,
         0.0f, 0.0f, 0.0f,
-        duration);
+        duration
+    );
 }
 
 void CameraProcessor::beginTransitionToCentered2D(float duration) {
@@ -157,21 +158,24 @@ void CameraProcessor::beginTransitionToStandard2D(float duration) {
     beginTransitionToPose(
         kStandard2DX, kStandard2DY, kStandard2DZ,
         0.0f, 0.0f, 0.0f,
-        duration);
+        duration
+    );
 }
 
 void CameraProcessor::beginTransitionToPreMenu2D(float duration) {
     beginTransitionToPose(
         0.0f, 0.0f, kPreMenu2DZ,
         0.0f, 0.0f, 0.0f,
-        duration);
+        duration
+    );
 }
 
 void CameraProcessor::beginTransitionToMenu(float duration) {
     beginTransitionToPose(
         kMenuX, kMenuY, kMenuZ,
         kMenuPitch, 0.0f, 0.0f,
-        duration);
+        duration
+    );
 }
 
 void CameraProcessor::updatePoseTransition(float deltaTime) {
@@ -188,7 +192,7 @@ void CameraProcessor::updatePoseTransition(float deltaTime) {
     const float rawT = m_poseTransitionElapsed / m_poseTransitionDuration;
     const float t = smoothStep01(rawT);
 
-    for (int c = 0; c < 3; ++c) {
+    for (int c = 0; c < 3; c++) {
         const float translation = lerp(
             m_poseStartTrans[c], m_poseTargetTrans[c], t);
         const float rotation = lerp(

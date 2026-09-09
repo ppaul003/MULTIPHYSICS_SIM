@@ -48,12 +48,6 @@ WorkspacePanelRow makeRow(
 	return row;
 }
 
-WorkspacePanelRow makeSummaryRow(const string& label) {
-	WorkspacePanelRow row;
-	row.label = label;
-	return row;
-}
-
 } // namespace
 
 bool ParticleSimWorkspace::initialize(WorkspaceServices& services) {
@@ -85,6 +79,8 @@ void ParticleSimWorkspace::enter(WorkspaceServices& services) {
 	m_active = true;
 	m_paused = true;
 	m_runtimeEnabled = false;
+	m_subLayerPanelOpen = false;
+	m_layer3Selection = Layer3Row::DisplaySliders;
 	m_elapsedSimulationTime = 0.0f;
 	m_textEntry.cancel();
 }
@@ -94,6 +90,7 @@ void ParticleSimWorkspace::exit(WorkspaceServices& services) {
 	m_active = false;
 	m_paused = true;
 	m_runtimeEnabled = false;
+	m_subLayerPanelOpen = false;
 	m_textEntry.cancel();
 }
 
@@ -262,6 +259,8 @@ bool ParticleSimWorkspace::handleLayer2Input(
 
 			if (applyRuntimeConfig()) {
 				m_elapsedSimulationTime = 0.0f;
+				m_subLayerPanelOpen = false;
+				m_layer3Selection = Layer3Row::DisplaySliders;
 				m_paused = false;
 				m_runtimeEnabled = true;
 				m_statusLine = "STATUS: RUNNING";
@@ -299,16 +298,59 @@ bool ParticleSimWorkspace::handleLayer3Input(
 	const WorkspaceInputEvent& input,
 	WorkspaceServices& services) {
 
-	if (input.action != WorkspaceInputAction::Back) return false;
+	switch (input.action) {
+	case WorkspaceInputAction::TogglePanel:
+		m_subLayerPanelOpen = !m_subLayerPanelOpen;
+		return true;
 
-	m_paused = true;
-	m_runtimeEnabled = false;
-	m_statusLine = "STATUS: PAUSED";
-	m_statusTone = WorkspaceStatusTone::Neutral;
-	services.arbiter->setApplicationLayer(
-		TheArbiter::ApplicationLayer::WORKSPACE_CONFIGURATION
-	);
-	return true;
+	case WorkspaceInputAction::TogglePause:
+		if (!m_runtimeEnabled) return true;
+		m_paused = !m_paused;
+		m_statusLine = m_paused ? "STATUS: PAUSED" : "STATUS: RUNNING";
+		m_statusTone = m_paused
+			? WorkspaceStatusTone::Neutral
+			: WorkspaceStatusTone::Ready;
+		return true;
+
+	case WorkspaceInputAction::Back:
+		m_subLayerPanelOpen = false;
+		m_paused = true;
+		m_runtimeEnabled = false;
+		m_statusLine = "STATUS: PAUSED";
+		m_statusTone = WorkspaceStatusTone::Neutral;
+		services.arbiter->setApplicationLayer(
+			TheArbiter::ApplicationLayer::WORKSPACE_CONFIGURATION
+		);
+		return true;
+
+	case WorkspaceInputAction::Previous:
+		if (!m_subLayerPanelOpen) return false;
+		moveLayer3Cursor(-1);
+		return true;
+
+	case WorkspaceInputAction::Next:
+		if (!m_subLayerPanelOpen) return false;
+		moveLayer3Cursor(+1);
+		return true;
+
+	case WorkspaceInputAction::Decrease:
+		if (!m_subLayerPanelOpen) return false;
+		adjustLayer3Value(-1);
+		return true;
+
+	case WorkspaceInputAction::Increase:
+		if (!m_subLayerPanelOpen) return false;
+		adjustLayer3Value(+1);
+		return true;
+
+	case WorkspaceInputAction::Activate:
+		return m_subLayerPanelOpen;
+
+	case WorkspaceInputAction::RawKey:
+	case WorkspaceInputAction::None:
+	default:
+		return false;
+	}
 }
 
 bool ParticleSimWorkspace::handleTextEntry(
@@ -573,33 +615,65 @@ WorkspacePresentation ParticleSimWorkspace::buildLayer2Presentation() const {
 
 WorkspacePresentation ParticleSimWorkspace::buildLayer3Presentation() const {
 	WorkspacePresentation p;
-	p.panelVisible = true;
-	p.workspaceName = "LAYER 3 -> PARTICLE_SIM ACTIVE WORKSPACE";
-	p.layerLabel = "MODE: PARTICLE_SIM";
+	p.panelLayout = WorkspacePanelLayout::SubLayer;
+	p.panelVisible = m_subLayerPanelOpen;
+	p.runtimeStatus = buildParticleRuntimeStatus();
+	p.workspaceName = "PARTICLE_SIMULATION MODE";
+	p.subLayerLabel = "SUB-LAYER_0 -> SIM ENV SETUP";
 
-	WorkspacePanelSection section;
-	section.rows.push_back(makeSummaryRow(
-		"ACTIVE VOXEL: " + voxelText(m_runtimeConfig.selectedSpawnRegionId)
+	WorkspacePanelSection toggle;
+	toggle.heading = "Toggle:";
+	toggle.rows.push_back(makeRow(
+		"[1]: DISPLAY SLIDERS",
+		m_displaySliders ? "ON" : "OFF",
+		m_layer3Selection == Layer3Row::DisplaySliders
 	));
-	section.rows.push_back(makeSummaryRow(
-		"PARTICLES: " + to_string(m_runtimeConfig.activeMacroParticleCount) +
-		"/" + to_string(m_runtimeConfig.capacity)
-	));
-	section.rows.push_back(makeSummaryRow(
-		"VOXEL VOLUME: " + to_string(m_runtimeConfig.selectedSpawnVolumeM3) +
-		" m^3"
-	));
-	p.sections.push_back(section);
+	p.sections.push_back(toggle);
 
-	p.statusLine = m_runtimeEnabled && !m_paused
-		? "STATUS: RUNNING"
-		: "STATUS: PAUSED";
-	p.statusTone = m_runtimeEnabled && !m_paused
+	WorkspacePanelSection camera;
+	camera.heading = "Camera Mode:";
+	camera.rows.push_back(makeRow(
+		"[2]: CAM VIEW",
+		layer3CameraViewName(),
+		m_layer3Selection == Layer3Row::CameraView
+	));
+	p.sections.push_back(camera);
+
+	WorkspacePanelSection next;
+	next.heading = "Next Sub-Layer:";
+	next.rows.push_back(makeRow(
+		"[3]: SHOOT PARTICLES",
+		"",
+		m_layer3Selection == Layer3Row::ShootParticles
+	));
+	p.sections.push_back(next);
+	return p;
+}
+
+WorkspaceRuntimeStatus
+ParticleSimWorkspace::buildParticleRuntimeStatus() const {
+	WorkspaceRuntimeStatus status;
+	status.visible = true;
+
+	status.titleLine =
+		"LAYER 3 -> SIMULATION RUNTIME (PARTICLE_SIMULATION)";
+	status.contextLine = m_subLayerPanelOpen
+		? "PARTICLE_SIMULATION: SUB-LAYER_0 SIM ENV SETUP"
+		: "PARTICLE_SIMULATION: LAYER 3 RUNTIME";
+
+	const bool running = m_runtimeEnabled && !m_paused;
+	status.objectLine =
+		"NUM PARTICLES: " +
+		to_string(m_runtimeConfig.activeMacroParticleCount) +
+		"/" + to_string(m_runtimeConfig.capacity) +
+		"        STATUS: " + (running ? "RUNNING" : "PAUSED");
+	status.objectTone = running
 		? WorkspaceStatusTone::Ready
 		: WorkspaceStatusTone::Neutral;
-	p.footerLine1 = "Q: Return to PARTICLE_SIM configuration";
-	p.footerLine2 = "ESC: Exit";
-	return p;
+	status.helpLine = m_subLayerPanelOpen
+		? "TAB: HIDE SUB_LAYER PANEL    SPACE: PAUSE    Q: BACK"
+		: "TAB: SUB_LAYER PANEL DISPLAY    SPACE: PAUSE    Q: BACK";
+	return status;
 }
 
 WorkspacePresentation ParticleSimWorkspace::buildPresentation() const {
@@ -782,6 +856,16 @@ void ParticleSimWorkspace::moveLayer2Cursor(int direction) {
 	m_layer2Selection = (m_layer2Selection + step + count) % count;
 }
 
+void ParticleSimWorkspace::moveLayer3Cursor(int direction) {
+	if (direction == 0) return;
+	const int count = static_cast<int>(Layer3Row::Count);
+	const int current = static_cast<int>(m_layer3Selection);
+	const int step = direction < 0 ? -1 : 1;
+	m_layer3Selection = static_cast<Layer3Row>(
+		(current + step + count) % count
+	);
+}
+
 void ParticleSimWorkspace::adjustLayer1Value(
 	int direction,
 	WorkspaceServices& services) {
@@ -912,6 +996,28 @@ void ParticleSimWorkspace::adjustLayer2Value(int direction) {
 
 	m_statusLine = "READY: PARTICLE_SIM workspace configuration.";
 	m_statusTone = WorkspaceStatusTone::Ready;
+}
+
+void ParticleSimWorkspace::adjustLayer3Value(int direction) {
+	if (direction == 0) return;
+
+	switch (m_layer3Selection) {
+	case Layer3Row::DisplaySliders:
+		m_displaySliders = !m_displaySliders;
+		return;
+
+	case Layer3Row::CameraView:
+		m_layer3CameraView =
+			m_layer3CameraView == Layer3CameraView::Orbit
+			? Layer3CameraView::Free
+			: Layer3CameraView::Orbit;
+		return;
+
+	case Layer3Row::ShootParticles:
+	case Layer3Row::Count:
+	default:
+		return;
+	}
 }
 
 void ParticleSimWorkspace::beginParticleAmountEntry() {
@@ -1059,4 +1165,10 @@ const char* ParticleSimWorkspace::resetModeName() const {
 	return m_draftConfig.resetMode == ResetMode::Random
 		? "RANDOM"
 		: "DEFAULT";
+}
+
+const char* ParticleSimWorkspace::layer3CameraViewName() const {
+	return m_layer3CameraView == Layer3CameraView::Free
+		? "FREE"
+		: "ORBIT";
 }

@@ -15,6 +15,8 @@ public:
         KEY_NONE = 0,
         KEY_ESCAPE,
         KEY_ENTER,
+        KEY_TAB,
+        KEY_SPACE,
         KEY_A,
         KEY_D,
         KEY_E,
@@ -44,6 +46,8 @@ private:
     KeySignal decode(unsigned char key) const {
         if (key == 27) return KEY_ESCAPE;
         if (key == 13) return KEY_ENTER;
+        if (key == '\t') return KEY_TAB;
+        if (key == ' ') return KEY_SPACE;
 
         const unsigned char lowered = static_cast<unsigned char>(
             std::tolower(static_cast<unsigned char>(key)));

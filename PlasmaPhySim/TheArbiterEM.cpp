@@ -35,6 +35,12 @@ TheArbiter::routeKeyboard(const KeyboardInput::KeyEvent& event) const {
     case KeyboardInput::KEY_Q:
         result.workspaceInput.action = WorkspaceInputAction::Back;
         break;
+    case KeyboardInput::KEY_TAB:
+        result.workspaceInput.action = WorkspaceInputAction::TogglePanel;
+        break;
+    case KeyboardInput::KEY_SPACE:
+        result.workspaceInput.action = WorkspaceInputAction::TogglePause;
+        break;
     default:
         if ((event.rawKey >= '0' && event.rawKey <= '9') ||
             event.rawKey == 8 || event.rawKey == 127) {

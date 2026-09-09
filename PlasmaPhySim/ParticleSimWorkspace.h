@@ -49,6 +49,18 @@ private:
 		Count
 	};
 
+	enum class Layer3Row {
+		DisplaySliders = 0,
+		CameraView,
+		ShootParticles,
+		Count
+	};
+
+	enum class Layer3CameraView {
+		Orbit = 0,
+		Free
+	};
+
 	enum class GridLayout {
 		None = 0,
 		MajorGrid,
@@ -121,6 +133,7 @@ private:
 	WorkspacePresentation buildLayer1Presentation() const;
 	WorkspacePresentation buildLayer2Presentation() const;
 	WorkspacePresentation buildLayer3Presentation() const;
+	WorkspaceRuntimeStatus buildParticleRuntimeStatus() const;
 
 	void renderConfiguredGrid(WorkspaceServices& services, GridLayout layout) const;
 	void renderSelectedSpawnRegion(WorkspaceServices& services) const;
@@ -145,8 +158,10 @@ private:
 
 	void moveLayer1Cursor(int direction);
 	void moveLayer2Cursor(int direction);
+	void moveLayer3Cursor(int direction);
 	void adjustLayer1Value(int direction, WorkspaceServices& services);
 	void adjustLayer2Value(int direction);
+	void adjustLayer3Value(int direction);
 	void beginParticleAmountEntry();
 
 	int layer2RowCount() const;
@@ -169,6 +184,7 @@ private:
 	const char* radiusModeName() const;
 	const char* colorChannelName() const;
 	const char* resetModeName() const;
+	const char* layer3CameraViewName() const;
 
 private:
 	static constexpr float kSimulationBoxSizeM = 4.0f;
@@ -195,6 +211,10 @@ private:
 
 	Layer1Row m_layer1Selection = Layer1Row::WorkspaceSelection;
 	int m_layer2Selection = 0;
+	bool m_subLayerPanelOpen = false;
+	Layer3Row m_layer3Selection = Layer3Row::DisplaySliders;
+	bool m_displaySliders = false;
+	Layer3CameraView m_layer3CameraView = Layer3CameraView::Orbit;
 
 	std::string m_statusLine = "READY: CUDA PARTICLE BASELINE.";
 	WorkspaceStatusTone m_statusTone = WorkspaceStatusTone::Ready;

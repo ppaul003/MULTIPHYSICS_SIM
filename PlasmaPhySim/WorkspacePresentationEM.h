@@ -11,6 +11,11 @@ enum class WorkspaceStatusTone {
     Transition
 };
 
+enum class WorkspacePanelLayout {
+    Main = 0,
+    SubLayer
+};
+
 struct WorkspacePanelRow {
     std::string label;
     std::string value;
@@ -23,6 +28,17 @@ struct WorkspacePanelSection {
     std::vector<WorkspacePanelRow> rows;
 };
 
+struct WorkspaceRuntimeStatus {
+    bool visible = false;
+
+    std::string titleLine;
+    std::string contextLine;
+    std::string objectLine;
+    std::string helpLine;
+
+    WorkspaceStatusTone objectTone = WorkspaceStatusTone::Neutral;
+};
+
 struct WorkspacePresentation {
     bool panelVisible = false;
     bool statusBlink = false;
@@ -30,9 +46,11 @@ struct WorkspacePresentation {
 
     WorkspaceStatusTone frameTone = WorkspaceStatusTone::Neutral;
     WorkspaceStatusTone statusTone = WorkspaceStatusTone::Neutral;
+    WorkspacePanelLayout panelLayout = WorkspacePanelLayout::Main;
 
     std::string workspaceName;
     std::string layerLabel;
+    std::string subLayerLabel;
     std::string statusLine;
 
     std::vector<WorkspacePanelSection> sections;
@@ -40,6 +58,8 @@ struct WorkspacePresentation {
 
     std::string footerLine1;
     std::string footerLine2;
+
+    WorkspaceRuntimeStatus runtimeStatus;
 };
 
 #endif
