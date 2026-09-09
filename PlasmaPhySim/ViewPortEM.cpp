@@ -4,6 +4,8 @@
 #include <cmath>
 #include <string>
 
+using namespace std;
+
 void ViewPort::resize(int width, int height) {
     m_windowWidth = clampPositive(width);
     m_windowHeight = clampPositive(height);
@@ -89,10 +91,10 @@ void ViewPort::drawWorkspaceFrame(const WorkspacePresentation& p) {
     }
 
     if (p.frameBlink) {
-        using Clock = std::chrono::steady_clock;
-        const float seconds = std::chrono::duration<float>(
+        using Clock = chrono::steady_clock;
+        const float seconds = chrono::duration<float>(
             Clock::now().time_since_epoch()).count();
-        if (std::fmod(seconds, 0.50f) >= 0.25f) alpha *= 0.20f;
+        if (fmod(seconds, 0.50f) >= 0.25f) alpha *= 0.20f;
     }
 
     glDisable(GL_DEPTH_TEST);
@@ -255,10 +257,10 @@ void ViewPort::drawSections(const WorkspacePresentation& p) {
         float alpha = m_panelSlide;
 
         if (p.statusBlink) {
-            using Clock = std::chrono::steady_clock;
-            const float seconds = std::chrono::duration<float>(
+            using Clock = chrono::steady_clock;
+            const float seconds = chrono::duration<float>(
                 Clock::now().time_since_epoch()).count();
-            if (std::fmod(seconds, 0.50f) >= 0.25f) alpha *= 0.20f;
+            if (fmod(seconds, 0.50f) >= 0.25f) alpha *= 0.20f;
         }
 
         switch (p.statusTone) {
@@ -276,7 +278,31 @@ void ViewPort::drawSections(const WorkspacePresentation& p) {
             break;
         }
 
-        drawText2D(panelX(x), y, p.statusLine.c_str(), GLUT_BITMAP_HELVETICA_18);
+        drawText2D(
+            panelX(x),
+            y,
+            p.statusLine.c_str(),
+            GLUT_BITMAP_HELVETICA_18
+        );
+
+        y += 44.0f;
+    }
+
+    // ---------------------------------------------------------
+    // Informational lines between status and footer.
+    // ---------------------------------------------------------
+    for (const string& line : p.postStatusLines) {
+
+        glColor4f(0.72f, 0.78f, 0.82f, m_panelSlide);
+
+        drawText2D(
+            panelX(x),
+            y,
+            line.c_str(),
+            GLUT_BITMAP_HELVETICA_18
+        );
+
+        y += 34.0f;
     }
 }
 

@@ -61,9 +61,9 @@ bool ParticleSimWorkspace::initialize(WorkspaceServices& services) {
 	if (!services.renderer || !services.arbiter) return false;
 
 	m_arbiter = services.arbiter;
-	m_voxelGrid.dimensions = ivec3(8, 8, 8);
-	m_voxelGrid.origin = vec3(-2.0f, -2.0f, -2.0f);
-	m_voxelGrid.voxelEdgeM = 0.5f;
+	m_baseVoxelGrid.dimensions = ivec3(8, 8, 8);
+	m_baseVoxelGrid.origin = vec3(-2.0f, -2.0f, -2.0f);
+	m_baseVoxelGrid.voxelEdgeM = 0.5f;
 	m_radii.assign(kParticleCapacity, 0.0f);
 
 	m_particleSystem = make_unique<ParticleSystem>(
@@ -131,13 +131,7 @@ void ParticleSimWorkspace::render(
 	case TheArbiter::ApplicationLayer::WORKSPACE_CONFIGURATION:
 		renderConfiguredGrid(services, m_draftConfig.gridLayout);
 		if (isVoxelSpawnRowSelected()) {
-			SpatialVoxelRegion selectedRegion;
-			if (m_voxelGrid.region(m_draftConfig.spawnVoxelId, selectedRegion)) {
-				services.renderer->drawHighlightedVoxel(
-					selectedRegion.center,
-					selectedRegion.halfExtent
-				);
-			}
+			renderSelectedSpawnRegion(services);
 		}
 		return;
 
@@ -379,7 +373,7 @@ void ParticleSimWorkspace::renderConfiguredGrid(
 		static_cast<int>(kGridSize),
 		static_cast<int>(kGridSize)
 	);
-	grid.origin = m_voxelGrid.origin;
+	grid.origin = m_baseVoxelGrid.origin;
 	grid.cellSize = vec3(
 		kSimulationBoxSizeM / static_cast<float>(kGridSize)
 	);
@@ -392,6 +386,38 @@ void ParticleSimWorkspace::renderConfiguredGrid(
 	display.axes = false;
 
 	services.renderer->drawUniformGrid(grid, display);
+}
+
+void ParticleSimWorkspace::renderSelectedSpawnRegion(
+	WorkspaceServices& services) const {
+
+	if (!services.renderer) return;
+
+	SpawnDensityRegion3D selectedRegion;
+	if (!m_spawnDensityGrid.region(
+		m_baseVoxelGrid,
+		m_draftConfig.spawnVoxelId,
+		selectedRegion
+	)) {
+		return;
+	}
+
+	// Draw each constituent base voxel so the 2x2x2 physical subdivision
+	// remains visible, then reinforce the continuous composite boundary.
+	for (const SpatialVoxelRegion& baseVoxel :
+		selectedRegion.constituentBaseVoxels) {
+		services.renderer->drawHighlightedVoxel(
+			baseVoxel.center,
+			baseVoxel.halfExtent,
+			2.0f
+		);
+	}
+
+	services.renderer->drawHighlightedVoxel(
+		selectedRegion.center,
+		selectedRegion.halfExtent,
+		4.0f
+	);
 }
 
 void ParticleSimWorkspace::renderActiveParticles(
@@ -474,73 +500,72 @@ WorkspacePresentation ParticleSimWorkspace::buildLayer2Presentation() const {
 		amount << "[1]: PARTICLE AMOUNT {" << colorChannelName() << "}[";
 		if (m_textEntry.isActive()) amount << ":=" << m_textEntry.getBuffer();
 		else amount << selectedColorCount();
-		amount << "]";
-		section.rows.push_back(makeRow(
-			amount.str(),
-			"",
-			m_layer2Selection == 0
-		));
 
-		ostringstream rgbSummary;
-		rgbSummary << "RED " << m_draftConfig.redCount
-			<< " | GREEN " << m_draftConfig.greenCount
-			<< " | BLUE " << m_draftConfig.blueCount;
-		section.rows.push_back(makeSummaryRow(rgbSummary.str()));
-		section.rows.push_back(makeSummaryRow(
-			"TOTAL " + to_string(requestedParticleCount()) + "/" +
-			to_string(m_capacity)
-		));
+		amount << "]";
+		section.rows.push_back(
+			makeRow(amount.str(), "", m_layer2Selection == 0)
+		);
 	}
 
-	section.rows.push_back(makeRow(
-		"[2]: PARTICLE RESET MODE",
-		resetModeName(),
-		m_layer2Selection == 1
-	));
+	section.rows.push_back(
+		makeRow("[2]: PARTICLE RESET MODE", resetModeName(), m_layer2Selection == 1)
+	);
 
 	if (m_draftConfig.radiusMode == RadiusMode::Uniform) {
-		section.rows.push_back(makeRow(
-			"[3]: PARTICLE RADIUS",
-			radiusText(m_draftConfig.uniformRadius),
-			m_layer2Selection == 2
-		));
-		section.rows.push_back(makeRow(
-			"[4]: SELECT VOXEL SPAWN",
-			voxelText(m_draftConfig.spawnVoxelId),
-			m_layer2Selection == 3
-		));
-		section.rows.push_back(makeRow(
-			"[5]: PRESS E TO RUN SIM",
-			"",
-			m_layer2Selection == 4
-		));
+		section.rows.push_back(
+			makeRow("[3]: PARTICLE RADIUS", radiusText(m_draftConfig.uniformRadius), m_layer2Selection == 2)
+		);
+
+		section.rows.push_back(
+			makeRow("[4]: SELECT VOXEL SPAWN", voxelText(m_draftConfig.spawnVoxelId), m_layer2Selection == 3)
+		);
+
+		section.rows.push_back(
+			makeRow("[5]: PRESS E TO RUN SIM", "", m_layer2Selection == 4)
+		);
 	}
 	else {
-		section.rows.push_back(makeRow(
-			"[3]: MIN RADIUS",
-			radiusText(m_draftConfig.minimumRadius),
-			m_layer2Selection == 2
-		));
-		section.rows.push_back(makeRow(
-			"[4]: MAX RADIUS",
-			radiusText(m_draftConfig.maximumRadius),
-			m_layer2Selection == 3
-		));
-		section.rows.push_back(makeRow(
-			"[5]: SELECT VOXEL SPAWN",
-			voxelText(m_draftConfig.spawnVoxelId),
-			m_layer2Selection == 4
-		));
-		section.rows.push_back(makeRow(
-			"[6]: PRESS E TO RUN SIM",
-			"",
-			m_layer2Selection == 5
-		));
+		section.rows.push_back(
+			makeRow("[3]: MIN RADIUS", radiusText(m_draftConfig.minimumRadius), m_layer2Selection == 2)
+		);
+
+		section.rows.push_back(
+			makeRow("[4]: MAX RADIUS",radiusText(m_draftConfig.maximumRadius), m_layer2Selection == 3)
+		);
+
+		section.rows.push_back(
+			makeRow("[5]: SELECT VOXEL SPAWN", voxelText(m_draftConfig.spawnVoxelId), m_layer2Selection == 4)
+		);
+
+		section.rows.push_back(
+			makeRow("[6]: PRESS E TO RUN SIM", "", m_layer2Selection == 5)
+		);
 	}
 
 	p.sections.push_back(section);
 	p.statusLine = m_statusLine;
 	p.statusTone = m_statusTone;
+	if (m_draftConfig.colorMode == ColorMode::RGB) {
+
+		ostringstream rgbSummary;
+
+		rgbSummary
+			<< "RED " << m_draftConfig.redCount
+			<< " | GREEN " << m_draftConfig.greenCount
+			<< " | BLUE " << m_draftConfig.blueCount;
+
+		p.postStatusLines.push_back(
+			rgbSummary.str()
+		);
+
+		p.postStatusLines.push_back(
+			"TOTAL " +
+			to_string(requestedParticleCount()) +
+			"/" +
+			to_string(m_capacity)
+		);
+	}
+
 	p.footerLine1 = "W/S: Select row    A/D: Change value    E: Activate / Enter";
 	p.footerLine2 = "Q: Return to Layer 1    ESC: Exit";
 	return p;
@@ -554,14 +579,14 @@ WorkspacePresentation ParticleSimWorkspace::buildLayer3Presentation() const {
 
 	WorkspacePanelSection section;
 	section.rows.push_back(makeSummaryRow(
-		"ACTIVE VOXEL: " + voxelText(m_runtimeConfig.selectedVoxelId)
+		"ACTIVE VOXEL: " + voxelText(m_runtimeConfig.selectedSpawnRegionId)
 	));
 	section.rows.push_back(makeSummaryRow(
 		"PARTICLES: " + to_string(m_runtimeConfig.activeMacroParticleCount) +
 		"/" + to_string(m_runtimeConfig.capacity)
 	));
 	section.rows.push_back(makeSummaryRow(
-		"VOXEL VOLUME: " + to_string(m_runtimeConfig.selectedVoxelVolumeM3) +
+		"VOXEL VOLUME: " + to_string(m_runtimeConfig.selectedSpawnVolumeM3) +
 		" m^3"
 	));
 	p.sections.push_back(section);
@@ -613,8 +638,12 @@ bool ParticleSimWorkspace::applyRuntimeConfig() {
 		return false;
 	}
 
-	SpatialVoxelRegion selectedRegion;
-	if (!m_voxelGrid.region(resolved.selectedVoxelId, selectedRegion)) {
+	SpawnDensityRegion3D selectedRegion;
+	if (!m_spawnDensityGrid.region(
+		m_baseVoxelGrid,
+		resolved.selectedSpawnRegionId,
+		selectedRegion
+	)) {
 		return false;
 	}
 
@@ -664,7 +693,7 @@ bool ParticleSimWorkspace::applyRuntimeConfig() {
 		m_particleSystem->setDefaultColorRamp();
 	}
 
-	resolved.selectedVoxelVolumeM3 = selectedRegion.volumeM3;
+	resolved.selectedSpawnVolumeM3 = selectedRegion.volumeM3;
 	resolved.activeMacroParticleCount = resolved.activeCount;
 	m_runtimeConfig = resolved;
 	m_activeCount = resolved.activeCount;
@@ -683,7 +712,8 @@ bool ParticleSimWorkspace::resolveRuntimeConfig(
 	RuntimeConfig& resolved) const {
 
 	if (m_draftConfig.gridLayout == GridLayout::Dynamic ||
-		m_draftConfig.spawnVoxelId >= m_voxelGrid.voxelCount()) {
+		m_draftConfig.spawnVoxelId >=
+			m_spawnDensityGrid.regionCount(m_baseVoxelGrid)) {
 		return false;
 	}
 
@@ -731,7 +761,7 @@ bool ParticleSimWorkspace::resolveRuntimeConfig(
 	resolved.radiusMode = m_draftConfig.radiusMode;
 	resolved.resetMode = m_draftConfig.resetMode;
 	resolved.gridLayout = m_draftConfig.gridLayout;
-	resolved.selectedVoxelId = m_draftConfig.spawnVoxelId;
+	resolved.selectedSpawnRegionId = m_draftConfig.spawnVoxelId;
 	return true;
 }
 
@@ -871,7 +901,9 @@ void ParticleSimWorkspace::adjustLayer2Value(int direction) {
 		);
 	}
 	else if (m_layer2Selection == voxelSpawnRowIndex()) {
-		const int count = static_cast<int>(m_voxelGrid.voxelCount());
+		const int count = static_cast<int>(
+			m_spawnDensityGrid.regionCount(m_baseVoxelGrid)
+		);
 		const int current = static_cast<int>(m_draftConfig.spawnVoxelId);
 		m_draftConfig.spawnVoxelId = static_cast<unsigned int>(
 			(current + step + count) % count

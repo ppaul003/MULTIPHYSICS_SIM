@@ -77,3 +77,9 @@ bool TheArbiter::isGlobalShell() const {
 bool TheArbiter::isDomainSelection() const {
     return m_navigation.layer == ApplicationLayer::DOMAIN_SELECTION;
 }
+
+bool TheArbiter::isWorkspaceLayer() const {
+    return m_navigation.layer == ApplicationLayer::DOMAIN_SELECTION ||
+        m_navigation.layer == ApplicationLayer::WORKSPACE_CONFIGURATION ||
+        m_navigation.layer == ApplicationLayer::ACTIVE_WORKSPACE;
+}

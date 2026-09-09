@@ -86,14 +86,13 @@ public:
     void requestEnterDomain(WorkspaceDomain domain);
     void requestReturnToGlobalShell(WorkspaceDomain domain);
 
-    bool hasNavigationRequest() const {
-        return m_navigationRequest.type != NavigationRequestType::NONE;
-    }
+    bool hasNavigationRequest() const { return m_navigationRequest.type != NavigationRequestType::NONE; }
 
     NavigationRequest takeNavigationRequest();
 
     bool isGlobalShell() const;
     bool isDomainSelection() const;
+    bool isWorkspaceLayer() const;
 
     void setUnitMeasurement(UnitMeasurement unit) { m_unitMeasurement = unit; }
     UnitMeasurement getUnitMeasurement() const { return m_unitMeasurement; }

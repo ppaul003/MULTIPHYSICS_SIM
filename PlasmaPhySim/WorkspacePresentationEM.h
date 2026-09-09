@@ -34,7 +34,10 @@ struct WorkspacePresentation {
     std::string workspaceName;
     std::string layerLabel;
     std::string statusLine;
+
     std::vector<WorkspacePanelSection> sections;
+    std::vector<std::string> postStatusLines;
+
     std::string footerLine1;
     std::string footerLine2;
 };

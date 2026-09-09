@@ -365,7 +365,7 @@ void EuclidEngine::onMouse(int button, int state, int x, int y) {
         return;
 
     // This sprint: camera interaction belongs to Layer 1.
-    if (!m_arbiter.isDomainSelection())
+    if (!m_arbiter.isWorkspaceLayer())
         return;
 
     // FreeGLUT wheel up/down.
@@ -394,7 +394,7 @@ void EuclidEngine::onMotion(int x, int y) {
     if (m_tesseract.domainTransitionActive())
         return;
 
-    if (!m_arbiter.isDomainSelection())
+    if (!m_arbiter.isWorkspaceLayer())
         return;
 
     if (!m_camera.orbitEnabled())

@@ -83,8 +83,8 @@ private:
 		ColorMode colorMode = ColorMode::Default;
 		RadiusMode radiusMode = RadiusMode::Uniform;
 
-		unsigned int defaultParticleCount = 4200;
-		unsigned int redCount = 4200;
+		unsigned int defaultParticleCount = 0;
+		unsigned int redCount = 0;
 		unsigned int greenCount = 0;
 		unsigned int blueCount = 0;
 		ColorChannel selectedColorChannel = ColorChannel::Red;
@@ -93,7 +93,7 @@ private:
 		float uniformRadius = 0.0120f;
 		float minimumRadius = 0.0098f;
 		float maximumRadius = 0.0156f;
-		unsigned int spawnVoxelId = 0;
+		unsigned int spawnVoxelId = 21;
 	};
 
 	struct RuntimeConfig {
@@ -113,8 +113,8 @@ private:
 		ResetMode resetMode = ResetMode::Default;
 		GridLayout gridLayout = GridLayout::None;
 
-		unsigned int selectedVoxelId = 0;
-		float selectedVoxelVolumeM3 = 0.0f;
+		unsigned int selectedSpawnRegionId = 21;
+		float selectedSpawnVolumeM3 = 0.0f;
 		unsigned int activeMacroParticleCount = 0;
 	};
 
@@ -123,6 +123,7 @@ private:
 	WorkspacePresentation buildLayer3Presentation() const;
 
 	void renderConfiguredGrid(WorkspaceServices& services, GridLayout layout) const;
+	void renderSelectedSpawnRegion(WorkspaceServices& services) const;
 	void renderActiveParticles(WorkspaceServices& services);
 
 	bool handleLayer1Input(
@@ -188,7 +189,8 @@ private:
 	TheArbiter* m_arbiter = nullptr;
 	DraftConfig m_draftConfig;
 	RuntimeConfig m_runtimeConfig;
-	SpatialVoxelGrid3D m_voxelGrid;
+	SpatialVoxelGrid3D m_baseVoxelGrid;
+	SpawnDensityRegionGrid3D m_spawnDensityGrid;
 	TextEntrySession m_textEntry;
 
 	Layer1Row m_layer1Selection = Layer1Row::WorkspaceSelection;

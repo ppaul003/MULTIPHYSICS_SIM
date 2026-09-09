@@ -198,13 +198,14 @@ public:
 
 	void drawHighlightedVoxel(
 		const glm::vec3& center,
-		const glm::vec3& halfExtent
+		const glm::vec3& halfExtent,
+		float lineWidth = 3.0f
 	) {
 		const glm::vec3 minimum = center - halfExtent;
 		const glm::vec3 maximum = center + halfExtent;
 
 		glUseProgram(0);
-		glLineWidth(3.0f);
+		glLineWidth(lineWidth > 0.0f ? lineWidth : 1.0f);
 		glColor4f(1.0f, 0.5f, 0.0f, 1.0f);
 		glBegin(GL_LINES);
 
