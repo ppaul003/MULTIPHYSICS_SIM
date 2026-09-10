@@ -971,7 +971,7 @@ bool ParticleSimWorkspace::applyRuntimeConfig() {
 	}
 
 	SpawnDensityRegion3D selectedRegion;
-	if (!m_spawnDensityGrid.region(
+	if (!m_spawnDensityGrid.selection(
 		m_baseVoxelGrid,
 		resolved.selectedSpawnSelectionIndex,
 		selectedRegion)) {
