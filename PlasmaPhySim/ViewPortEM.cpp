@@ -537,6 +537,13 @@ void ViewPort::drawSubLayerPresentation(
 void ViewPort::drawFooter(const WorkspacePresentation& p) {
     const float x = panelX(95.0f);
 
+    // Bottom edge of side panel
+    const float panelBottom = static_cast<float>(m_windowHeight) - m_margin;
+
+    // Footer anchored relative to bottom edge.
+    const float footerLine2Y = panelBottom - 22.0f;
+    const float footerLine1Y = footerLine2Y - 30.0f;
+    const float footerDividerY = footerLine1Y - 26.0f;
     // ----------------------------------------
     // Divider
     // ----------------------------------------
@@ -548,8 +555,8 @@ void ViewPort::drawFooter(const WorkspacePresentation& p) {
     );
 
     glBegin(GL_LINES);
-    glVertex2f(x, 790.0f);
-    glVertex2f(panelX(505.0f), 790.0f);
+    glVertex2f(x, footerDividerY);
+    glVertex2f(panelX(505.0f), footerDividerY);
     glEnd();
 
     // ----------------------------------------
@@ -565,7 +572,7 @@ void ViewPort::drawFooter(const WorkspacePresentation& p) {
 
         drawText2D(
             x,
-            820.0f,
+            footerLine1Y,
             p.footerLine1.c_str(),
             GLUT_BITMAP_HELVETICA_12
         );
@@ -574,7 +581,7 @@ void ViewPort::drawFooter(const WorkspacePresentation& p) {
     if (!p.footerLine2.empty()) {
         drawText2D(
             x,
-            850.0f,
+            footerLine2Y,
             p.footerLine2.c_str(),
             GLUT_BITMAP_HELVETICA_12
         );

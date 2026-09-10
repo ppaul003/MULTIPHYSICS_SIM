@@ -48,6 +48,18 @@ private:
         Count
     };
 
+    enum class Layer2Row {
+        ParticleSpecies = 0,
+        TotalGasDensity,
+        IonizationFraction,
+        ElectronTemperature,
+        IonTemperature,
+        NeutralTemperature,
+        VoxelSpawn,
+        RunSimulation,
+        Count
+    };
+
     enum class GridLayout {
         None = 0,
         MajorGrid,
@@ -68,15 +80,33 @@ private:
         Count
     };
     
+    enum class ParticleSpecies {
+        Hydrogen = 0,
+        Helium, 
+        Argon,
+        Count
+    };
+
     enum class Layer3CameraView {
         Orbit = 0,
         Free
     };
 
     struct DraftConfig {
+
+        // --- Layer 1 --- 
         GridLayout gridLayout = GridLayout::None;
         MultiphysicsMode multphysicsMode = MultiphysicsMode::PlasmaPhy;
         SimSpaceMedium simSpaceMedium = SimSpaceMedium::Vacuum;
+
+        // --- Layer 2 ---
+        ParticleSpecies particleSpecies = ParticleSpecies::Argon;
+        unsigned int totalGasDensity = 0;
+        float ionizationFraction = 0.10f;
+        float electronTemperature = 0.0f;
+        float ionTemperature = 0.0f;
+        float neutralTemperature = 0.0f;
+        unsigned int spawnVoxelId = 0;
     };
 
     struct ParticleVisual {
@@ -91,21 +121,41 @@ private:
     };
 
     WorkspacePresentation buildLayer1Presentation() const;
-    
-    void renderConfiguredGrid(WorkspaceServices& services, GridLayout layout) const;
+    WorkspacePresentation buildLayer2Presentation() const;
 
-    bool handleLayer1Input(
-        const WorkspaceInputEvent& input,
-        WorkspaceServices& services
-    );
+    bool handleLayer1Input(const WorkspaceInputEvent& input, WorkspaceServices& services);
+    bool handleLayer2Input(const WorkspaceInputEvent& input, WorkspaceServices& services);
+
+    bool handleLayer2TextEntry(const WorkspaceInputEvent& input);
+
+    unsigned int neutralCount() const;
+    unsigned int ionCount() const;
+    unsigned int electronCount() const;
+    unsigned int requestedMarkerCount() const;
+
+    void renderConfiguredGrid(WorkspaceServices& services, GridLayout layout) const;
+    void renderSelectedSpawnRegion(WorkspaceServices& services) const;
+
+    void beginGasDensityEntry();
 
     void moveLayer1Cursor(int direction);
+    void moveLayer2Cursor(int direction);
+
     void adjustLayer1Value(int direction, WorkspaceServices& services);
+    void adjustLayer2Value(int direction);
+
     void refreshLayer1Status();
+
+    bool isVoxelSpawnRowSelected() const;
+    int voxelSpawnRowIndex() const;
+
+    static std::string voxelText(unsigned int voxelId);
 
     const char* gridLayoutName() const;
     const char* multiphysicsModeName() const;
     const char* simSpaceMediumName() const;
+    const char* particleSpeciesName() const;
+
 
 private:
     static constexpr float kSimBoxSizeM = 4.0f;
@@ -126,8 +176,12 @@ private:
     TheArbiter* m_arbiter = nullptr;
     DraftConfig m_draftConfig;
     SpatialVoxelGrid3D m_baseVoxelGrid;
+    SpawnDensityRegionGrid3D m_spawnDensityGrid;
+    TextEntrySession m_textEntry;
 
     Layer1Row m_layer1Selection = Layer1Row::WorkspaceSelection;
+    Layer2Row m_layer2Selection = Layer2Row::ParticleSpecies;
+
     WorkspaceStatusTone m_statusTone = WorkspaceStatusTone::Ready;
 
     bool m_subLayerPanelOpen = false;

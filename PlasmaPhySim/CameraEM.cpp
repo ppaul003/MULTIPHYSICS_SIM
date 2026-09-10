@@ -18,6 +18,52 @@ namespace {
     constexpr float kStandard2DY = 0.00f;
     constexpr float kStandard2DZ = -6.00f;
     constexpr float kPreMenu2DZ = -8.00f;
+    constexpr float kDegreesToRadians = 0.01745329251994329577f;
+    constexpr float kFreeMoveSpeed = 2.0f;
+    constexpr float kFreeLookDegreesPerPixel = 0.20f;
+
+    void multiplyRotation(const float* left, const float* right, float* result) {
+        float product[9]{};
+        for (int row = 0; row < 3; ++row) {
+            for (int col = 0; col < 3; ++col) {
+                for (int k = 0; k < 3; ++k) {
+                    product[row * 3 + col] += left[row * 3 + k] * right[k * 3 + col];
+                }
+            }
+        }
+        std::copy(product, product + 9, result);
+    }
+
+    void makeViewRotation(const float* angles, float* result) {
+        const float cx = std::cos(angles[0] * kDegreesToRadians);
+        const float sx = std::sin(angles[0] * kDegreesToRadians);
+        const float cy = std::cos(angles[1] * kDegreesToRadians);
+        const float sy = std::sin(angles[1] * kDegreesToRadians);
+        const float cz = std::cos(angles[2] * kDegreesToRadians);
+        const float sz = std::sin(angles[2] * kDegreesToRadians);
+        const float rx[9]{1, 0, 0, 0, cx, -sx, 0, sx, cx};
+        const float ry[9]{cy, 0, sy, 0, 1, 0, -sy, 0, cy};
+        const float rz[9]{cz, -sz, 0, sz, cz, 0, 0, 0, 1};
+        multiplyRotation(rx, ry, result);
+        multiplyRotation(result, rz, result);
+    }
+
+    void normalizeAxis(float* axis) {
+        const float length = std::sqrt(axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]);
+        if (length > 0.0f) {
+            for (int c = 0; c < 3; ++c) axis[c] /= length;
+        }
+    }
+
+    void orthonormalizeRotation(float* rotation) {
+        normalizeAxis(rotation);
+        const float projection = rotation[0] * rotation[3] + rotation[1] * rotation[4] + rotation[2] * rotation[5];
+        for (int c = 0; c < 3; ++c) rotation[3 + c] -= projection * rotation[c];
+        normalizeAxis(rotation + 3);
+        rotation[6] = rotation[1] * rotation[5] - rotation[2] * rotation[4];
+        rotation[7] = rotation[2] * rotation[3] - rotation[0] * rotation[5];
+        rotation[8] = rotation[0] * rotation[4] - rotation[1] * rotation[3];
+    }
 
     float smoothStep01(float t) {
         if (t <= 0.0f) return 0.0f;
@@ -38,7 +84,7 @@ CameraProcessor::CameraProcessor() :
 }
 
 void CameraProcessor::updateLag() {
-    if (m_poseTransitionActive) return;
+    if (m_poseTransitionActive || m_freeViewActive) return;
 
     for (int c = 0; c < 3; c++) {
         m_cameraTransLag[c] +=
@@ -49,6 +95,20 @@ void CameraProcessor::updateLag() {
 }
 
 void CameraProcessor::applyCameraTransform() {
+    if (m_freeViewActive) {
+        // OpenGL expects column-major storage for the view matrix [ R | -R * eye ].
+        float view[16]{};
+        for (int row = 0; row < 3; ++row) {
+            for (int col = 0; col < 3; ++col) {
+                view[col * 4 + row] = m_freeRotation[row * 3 + col];
+                view[12 + row] -= m_freeRotation[row * 3 + col] * m_freeEye[col];
+            }
+        }
+        view[15] = 1.0f;
+        glMultMatrixf(view);
+        return;
+    }
+
     glTranslatef(
         m_cameraTransLag[0],
         m_cameraTransLag[1],
@@ -87,6 +147,7 @@ void CameraProcessor::setStandard2DTarget() {
 }
 
 void CameraProcessor::setBehaviorMode(CameraBehaviorMode mode) {
+    endFreeView();
     m_behaviorMode = mode;
 
     switch (mode) {
@@ -108,6 +169,7 @@ void CameraProcessor::beginTransitionToPose(
     float rx, float ry, float rz,
     float duration) {
 
+    endFreeView();
     for (int c = 0; c < 3; c++) {
         m_poseStartTrans[c] = m_cameraTransLag[c];
         m_poseStartRot[c] = m_cameraRotLag[c];
@@ -233,4 +295,57 @@ void CameraProcessor::zoom(float amount) {
 
     m_cameraTrans[2] += amount * distance;
     m_cameraTrans[2] = clamp(m_cameraTrans[2], -30.0f, -1.5f);
+}
+
+void CameraProcessor::beginFreeView() {
+    if (m_freeViewActive || !orbitEnabled()) return;
+
+    // Capture the displayed pose, not the still-converging orbit target.
+    for (int c = 0; c < 3; ++c) {
+        m_savedOrbitTrans[c] = m_cameraTransLag[c];
+        m_savedOrbitRot[c] = m_cameraRotLag[c];
+    }
+    makeViewRotation(m_savedOrbitRot, m_freeRotation);
+    for (int c = 0; c < 3; ++c) {
+        m_freeEye[c] = 0.0f;
+        for (int row = 0; row < 3; ++row) {
+            m_freeEye[c] -= m_freeRotation[row * 3 + c] * m_savedOrbitTrans[row];
+        }
+    }
+    m_freeViewActive = true;
+}
+
+void CameraProcessor::endFreeView() {
+    if (!m_freeViewActive) return;
+
+    for (int c = 0; c < 3; ++c) {
+        m_cameraTrans[c] = m_cameraTransLag[c] = m_savedOrbitTrans[c];
+        m_cameraRot[c] = m_cameraRotLag[c] = m_savedOrbitRot[c];
+        m_savedOrbitTrans[c] = m_savedOrbitRot[c] = m_freeEye[c] = 0.0f;
+    }
+    std::fill(m_freeRotation, m_freeRotation + 9, 0.0f);
+    m_freeViewActive = false;
+}
+
+void CameraProcessor::moveFree(float forward, float right, float deltaTime) {
+    if (!m_freeViewActive || deltaTime <= 0.0f) return;
+
+    // Diagonal movement has the same speed as movement along one local axis.
+    const float inputLength = std::sqrt(forward * forward + right * right);
+    const float distance = kFreeMoveSpeed * deltaTime / (std::max)(1.0f, inputLength);
+    for (int c = 0; c < 3; ++c) {
+        m_freeEye[c] += (right * m_freeRotation[c] - forward * m_freeRotation[6 + c]) * distance;
+    }
+}
+
+void CameraProcessor::lookFree(float dx, float dy) {
+    if (!m_freeViewActive || (dx == 0.0f && dy == 0.0f)) return;
+
+    // Rotate around the current camera axes without moving the eye. This also
+    // preserves arbitrary orbit orientation on entry, including past vertical.
+    const float angles[3]{dy * kFreeLookDegreesPerPixel, dx * kFreeLookDegreesPerPixel, 0.0f};
+    float localRotation[9];
+    makeViewRotation(angles, localRotation);
+    multiplyRotation(localRotation, m_freeRotation, m_freeRotation);
+    orthonormalizeRotation(m_freeRotation);
 }

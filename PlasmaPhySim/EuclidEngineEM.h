@@ -46,6 +46,10 @@ private:
     static void sDisplay();
     static void sReshape(int w, int h);
     static void sKeyboard(unsigned char key, int x, int y);
+    static void sKeyboardUp(unsigned char key, int x, int y);
+    static void sMainMenu(int value);
+    static void sMenuStatus(int status, int x, int y);
+    static void sEntry(int state);
     static void sMouse(int button, int state, int x, int y);
     static void sMotion(int x, int y);
     static void sIdle();
@@ -53,6 +57,8 @@ private:
 
     void initGL(int* argc, char** argv);
     void initRenderer();
+    void initMenus();
+    void rebuildMenus();
     bool initWorkspaceHost();
 
     WorkspaceFrameContext buildWorkspaceFrameContext(float deltaTime) const;
@@ -60,6 +66,8 @@ private:
     void onDisplay();
     void onReshape(int w, int h);
     void onKeyboard(unsigned char key, int x, int y);
+    void onKeyboardUp(unsigned char key, int x, int y);
+    void cancelInput();
     void onMouse(int button, int state, int x, int y);
     void onMotion(int x, int y);
     void onIdle();
@@ -71,6 +79,9 @@ private:
 private:
     static constexpr unsigned int kWidth = 1920;
     static constexpr unsigned int kHeight = 1080;
+    static constexpr int MENU_NOP = -1;
+    static constexpr int MENU_QUIT = 27;
+    static constexpr int MENU_WORKSPACE_COMMAND_BASE = 10000;
 
     TheArbiter m_arbiter;
     Tesseract m_tesseract;
@@ -80,6 +91,15 @@ private:
     MouseInput m_mouse;
 
     EuclidRenderer* m_renderer = nullptr;
+    int m_menuId = 0;
+    std::vector<int> m_workspaceMenuCommands;
+    bool m_menuOpen = false;
+    bool m_menuDirty = false;
+    bool m_workspacePointerCaptured = false;
+    bool m_keysDown[256]{};
+#ifdef _WIN32
+    HWND m_windowHandle = nullptr;
+#endif
 
     bool m_displayEnabled = true;
     bool m_exiting = false;

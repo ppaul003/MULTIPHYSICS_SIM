@@ -32,8 +32,14 @@ public:
     void orbit(float dx, float dy);
     void zoom(float amount);
 
-    bool orbitEnabled() const { return !m_poseTransitionActive && m_behaviorMode == CAM_STANDARD_3D; }
-    bool zoomEnabled() const { return !m_poseTransitionActive && (m_behaviorMode == CAM_STANDARD_3D || m_behaviorMode == CAM_STANDARD_2D); }
+    void beginFreeView();
+    void endFreeView();
+    bool freeViewActive() const { return m_freeViewActive; }
+    void moveFree(float forward, float right, float deltaTime);
+    void lookFree(float dx, float dy);
+
+    bool orbitEnabled() const { return !m_freeViewActive && !m_poseTransitionActive && m_behaviorMode == CAM_STANDARD_3D; }
+    bool zoomEnabled() const { return !m_freeViewActive && !m_poseTransitionActive && (m_behaviorMode == CAM_STANDARD_3D || m_behaviorMode == CAM_STANDARD_2D); }
 
 private:
     void beginTransitionToPose(
@@ -63,6 +69,13 @@ private:
     float m_cameraRot[3];
     float m_cameraTransLag[3];
     float m_cameraRotLag[3];
+
+    bool m_freeViewActive = false;
+    float m_savedOrbitTrans[3]{};
+    float m_savedOrbitRot[3]{};
+    float m_freeEye[3]{};
+    // Row-major world-to-camera rotation; its rows are the camera's local axes.
+    float m_freeRotation[9]{};
 };
 
 #endif

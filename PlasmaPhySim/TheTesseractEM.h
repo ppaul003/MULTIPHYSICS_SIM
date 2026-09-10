@@ -45,8 +45,14 @@ public:
     void update(const WorkspaceFrameContext& frame);
     void render(const WorkspaceFrameContext& frame);
     bool handleInput(const WorkspaceInputEvent& event);
+    bool handleInputRelease(const WorkspaceInputEvent& event);
+    bool handlePointerInput(const WorkspacePointerEvent& event);
+    void cancelInput();
+    void renderOverlay(const WorkspaceFrameContext& frame);
 
     WorkspacePresentation presentation() const;
+    WorkspaceMenuPresentation menu() const;
+    bool handleMenuCommand(int command);
 
     void processNavigationRequest();
     void updateDomainTransition(const WorkspaceFrameContext& frame);

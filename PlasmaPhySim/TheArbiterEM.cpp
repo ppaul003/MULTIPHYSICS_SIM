@@ -60,6 +60,36 @@ TheArbiter::routeKeyboard(const KeyboardInput::KeyEvent& event) const {
     return result;
 }
 
+WorkspacePointerEvent TheArbiter::translateMouseButton(
+    int button, int state, int x, int y) const {
+    WorkspacePointerEvent input;
+    input.pressed = state == GLUT_DOWN;
+    input.x = x;
+    input.y = y;
+    switch (button) {
+    case GLUT_LEFT_BUTTON: input.button = WorkspacePointerEvent::Button::Left; break;
+    case GLUT_MIDDLE_BUTTON: input.button = WorkspacePointerEvent::Button::Middle; break;
+    case GLUT_RIGHT_BUTTON: input.button = WorkspacePointerEvent::Button::Right; break;
+    case 3: input.button = WorkspacePointerEvent::Button::WheelUp; break;
+    case 4: input.button = WorkspacePointerEvent::Button::WheelDown; break;
+    default: break;
+    }
+    return input;
+}
+
+WorkspacePointerEvent TheArbiter::translateMouseMotion(
+    int x, int y, int dx, int dy) const {
+    WorkspacePointerEvent input;
+    input.type = WorkspacePointerEvent::Type::Motion;
+    input.button = WorkspacePointerEvent::Button::Left;
+    input.pressed = true;
+    input.x = x;
+    input.y = y;
+    input.dx = dx;
+    input.dy = dy;
+    return input;
+}
+
 void TheArbiter::requestEnterDomain(WorkspaceDomain domain) {
     m_navigationRequest.type = NavigationRequestType::ENTER_DOMAIN;
     m_navigationRequest.domain = domain;

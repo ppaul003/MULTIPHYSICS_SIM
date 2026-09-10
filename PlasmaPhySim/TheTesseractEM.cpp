@@ -117,6 +117,40 @@ bool Tesseract::handleInput(const WorkspaceInputEvent& event) {
     return handled;
 }
 
+bool Tesseract::handleInputRelease(const WorkspaceInputEvent& event) {
+    return m_activeWorkspace &&
+        m_activeWorkspace->handleInputRelease(event, m_services);
+}
+
+bool Tesseract::handlePointerInput(const WorkspacePointerEvent& event) {
+    if (domainTransitionActive()) return true;
+    return m_activeWorkspace &&
+        m_activeWorkspace->handlePointerInput(event, m_services);
+}
+
+void Tesseract::cancelInput() {
+    if (m_activeWorkspace) m_activeWorkspace->cancelInput(m_services);
+}
+
+void Tesseract::renderOverlay(const WorkspaceFrameContext& frame) {
+    if (!domainTransitionActive() && m_activeWorkspace)
+        m_activeWorkspace->renderOverlay(frame, m_services);
+}
+
+WorkspaceMenuPresentation Tesseract::menu() const {
+    return m_activeWorkspace
+        ? m_activeWorkspace->buildMenu()
+        : WorkspaceMenuPresentation{};
+}
+
+bool Tesseract::handleMenuCommand(int command) {
+    if (domainTransitionActive() || !m_activeWorkspace) return false;
+    const bool handled = m_activeWorkspace->handleMenuCommand(command, m_services);
+    processNavigationRequest();
+    if (!domainTransitionActive()) synchronizeActiveCartridge();
+    return handled;
+}
+
 WorkspacePresentation Tesseract::presentation() const {
     using Domain = TheArbiter::WorkspaceDomain;
     using Phase = DomainTransitionPhase;

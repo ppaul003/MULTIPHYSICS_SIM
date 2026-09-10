@@ -1,6 +1,9 @@
 #include "ParticleSimWorkspace.h"
 
 #include "rendererEM_Euclid.h"
+#include "CameraEM.h"
+
+#include <paramgl.h>
 
 #include <algorithm>
 #include <cmath>
@@ -12,57 +15,106 @@ using namespace glm;
 
 namespace {
 
-	constexpr float kRadiusPresets[] = {
-		0.0039f,
-		0.0046f,
-		0.0054f,
-		0.0061f,
-		0.0068f,
-		0.0076f,
-		0.0083f,
-		0.0091f,
-		0.0098f,
-		0.0105f,
-		0.0113f,
-		0.0120f,
-		0.0127f,
-		0.0135f,
-		0.0142f,
-		0.0149f,
-		0.0156f
-	};
+enum ParticleSimMenuCommand {
+	MenuDisplaySliders = 1,
+	MenuCameraView,
+	MenuShootParticles
+};
 
-	constexpr int kRadiusPresetCount =
-		static_cast<int>(sizeof(kRadiusPresets) / sizeof(kRadiusPresets[0]));
+// ParamListGL uses fixed 510-pixel-wide, 15-pixel-high rows.
+constexpr int kSliderX = 32;
+constexpr int kSliderY = 208;
+constexpr int kSliderWidth = 510;
+constexpr int kSliderRowHeight = 15;
 
-	WorkspacePanelRow makeRow(
-		const string& label,
-		const string& value,
-		bool selected) {
+constexpr float kRadiusPresets[] = {
+	0.0039f,
+	0.0046f,
+	0.0054f,
+	0.0061f,
+	0.0068f,
+	0.0076f,
+	0.0083f,
+	0.0091f,
+	0.0098f,
+	0.0105f,
+	0.0113f,
+	0.0120f,
+	0.0127f,
+	0.0135f,
+	0.0142f,
+	0.0149f,
+	0.0156f
+};
 
-		WorkspacePanelRow row;
-		row.label = label;
-		row.value = value;
-		row.selectable = true;
-		row.selected = selected;
-		return row;
-	}
+constexpr int kRadiusPresetCount =
+	static_cast<int>(sizeof(kRadiusPresets) / sizeof(kRadiusPresets[0]));
+
+WorkspacePanelRow makeRow(
+	const string& label,
+	const string& value,
+	bool selected) {
+
+	WorkspacePanelRow row;
+	row.label = label;
+	row.value = value;
+	row.selectable = true;
+	row.selected = selected;
+	return row;
+}
 
 } // namespace
+
+struct ParticleSimWorkspace::RuntimeSliders {
+	float timeScale = 1.0f;
+	float damping = 1.0f;
+	float gravity = 0.0f;
+	int ballRadius = 10; // Reserved sample brush radius for future Shoot Particles.
+	float collideSpring = 0.5f;
+	float collideDamping = 0.02f;
+	float collideShear = 0.1f;
+	float collideAttraction = 0.0f;
+	bool rendered = false;
+
+	// ParamListGL borrows its ParamBase pointers; retain ownership here.
+	std::vector<std::unique_ptr<ParamBase>> parameters;
+	ParamListGL panel;
+
+	RuntimeSliders() : panel("PARTICLE_SIM live parameters") {
+		auto addFloat = [&](const char* name, float& value, float minimum,
+			float maximum, float step, int precision = 3) {
+			auto parameter = std::make_unique<Param<float>>(
+				name, value, minimum, maximum, step, &value);
+			parameter->SetPrecision(precision);
+			panel.AddParam(parameter.get());
+			parameters.push_back(std::move(parameter));
+		};
+		addFloat("Time scale", timeScale, 0.0f, 2.0f, 0.01f);
+		addFloat("Damping", damping, 0.0f, 1.0f, 0.001f);
+		addFloat("Gravity", gravity, 0.0f, 0.001f, 0.0001f, 4);
+		auto radius = std::make_unique<Param<int>>(
+			"Ball radius (shoot)", ballRadius, 1, 20, 1, &ballRadius);
+		panel.AddParam(radius.get());
+		parameters.push_back(std::move(radius));
+		addFloat("Collide spring", collideSpring, 0.0f, 1.0f, 0.001f);
+		addFloat("Collide damping", collideDamping, 0.0f, 0.1f, 0.001f);
+		addFloat("Collide shear", collideShear, 0.0f, 0.1f, 0.001f);
+		addFloat("Collide attraction", collideAttraction, 0.0f, 0.1f, 0.001f);
+		panel.SetSelectedColor(0.35f, 1.0f, 0.75f);
+		panel.SetBarColorInner(0.35f, 1.0f, 0.75f);
+	}
+};
+
+ParticleSimWorkspace::ParticleSimWorkspace() = default;
+ParticleSimWorkspace::~ParticleSimWorkspace() = default;
 
 bool ParticleSimWorkspace::initialize(WorkspaceServices& services) {
 	if (m_initialized) return true;
 	if (!services.renderer || !services.arbiter) return false;
 
 	m_arbiter = services.arbiter;
-
-	m_baseVoxelGrid.dimensions = ivec3(
-		kMajorGridEvery, 
-		kMajorGridEvery, 
-		kMajorGridEvery
-	);
-
-	m_baseVoxelGrid.origin = vec3(-kSimHalfBoxM, -kSimHalfBoxM, -kSimHalfBoxM);
+	m_baseVoxelGrid.dimensions = ivec3(8, 8, 8);
+	m_baseVoxelGrid.origin = vec3(-2.0f, -2.0f, -2.0f);
 	m_baseVoxelGrid.voxelEdgeM = 0.5f;
 	m_radii.assign(kParticleCapacity, 0.0f);
 
@@ -71,9 +123,10 @@ bool ParticleSimWorkspace::initialize(WorkspaceServices& services) {
 		m_gridDimensions,
 		true
 	);
-
-	m_particleSystem->setSimulationDomain(kSimBoxSizeM);
+	m_particleSystem->setSimulationDomain(kSimulationBoxSizeM);
 	if (!m_particleSystem->setActiveParticleCount(0)) return false;
+	m_runtimeSliders = std::make_unique<RuntimeSliders>();
+	applyLiveParameters();
 
 	m_initialized = true;
 	return true;
@@ -82,6 +135,7 @@ bool ParticleSimWorkspace::initialize(WorkspaceServices& services) {
 void ParticleSimWorkspace::enter(WorkspaceServices& services) {
 	if (!m_arbiter) m_arbiter = services.arbiter;
 	if (!m_initialized) return;
+	setLayer3CameraView(Layer3CameraView::Orbit, services);
 
 	m_active = true;
 	m_paused = true;
@@ -93,7 +147,7 @@ void ParticleSimWorkspace::enter(WorkspaceServices& services) {
 }
 
 void ParticleSimWorkspace::exit(WorkspaceServices& services) {
-	(void)services;
+	setLayer3CameraView(Layer3CameraView::Orbit, services);
 	m_active = false;
 	m_paused = true;
 	m_runtimeEnabled = false;
@@ -105,27 +159,30 @@ void ParticleSimWorkspace::update(
 	const WorkspaceFrameContext& frame,
 	WorkspaceServices& services) {
 
-	if (!m_active ||
-		!m_particleSystem ||
-		!services.arbiter ||
-		services.arbiter->getApplicationLayer() !=
-			TheArbiter::ApplicationLayer::ACTIVE_WORKSPACE ||
-		!m_runtimeEnabled ||
-		m_paused) {
-		return;
-	}
+	if (!layer3Active()) return;
 
-	m_particleSystem->update(frame.deltaTime);
-	m_elapsedSimulationTime += frame.deltaTime;
+	// Camera motion is independent of the simulation's pause/time-scale state.
+	if (!m_subLayerPanelOpen &&
+		m_layer3CameraView == Layer3CameraView::Free && services.camera) {
+		services.camera->moveFree(
+			static_cast<float>(m_freeMovementKeys[0]) - static_cast<float>(m_freeMovementKeys[1]),
+			static_cast<float>(m_freeMovementKeys[3]) - static_cast<float>(m_freeMovementKeys[2]),
+			frame.deltaTime);
+	}
+	if (!m_particleSystem || !m_runtimeEnabled || m_paused) return;
+	const float deltaTime = frame.deltaTime *
+		(m_runtimeSliders ? m_runtimeSliders->timeScale : 1.0f);
+	if (deltaTime <= 0.0f) return;
+	applyLiveParameters();
+	m_particleSystem->update(deltaTime);
+	m_elapsedSimulationTime += deltaTime;
 }
 
 void ParticleSimWorkspace::render(
 	const WorkspaceFrameContext& frame,
 	WorkspaceServices& services) {
 
-	if (!frame.displayEnabled ||
-		!services.renderer ||
-		!services.arbiter) {
+	if (!frame.displayEnabled || !services.renderer || !services.arbiter) {
 		return;
 	}
 
@@ -175,6 +232,189 @@ bool ParticleSimWorkspace::handleInput(
 	}
 }
 
+bool ParticleSimWorkspace::layer3Active() const {
+	return m_active && m_arbiter &&
+		m_arbiter->getApplicationLayer() == TheArbiter::ApplicationLayer::ACTIVE_WORKSPACE &&
+		m_arbiter->getActiveWorkspace() == TheArbiter::WorkspaceId::PARTICLE_SIMULATION;
+}
+
+bool ParticleSimWorkspace::slidersVisible() const {
+	return layer3Active() && m_displaySliders && !m_subLayerPanelOpen && m_runtimeSliders;
+}
+
+WorkspaceMenuPresentation ParticleSimWorkspace::buildMenu() const {
+	WorkspaceMenuPresentation menu;
+	if (!layer3Active()) return menu;
+	auto add = [&](const std::string& label, int command, bool enabled = true) {
+		menu.items.push_back({ label, command, enabled });
+	};
+	auto divider = [&]() { add("=========================================", 0, false); };
+	divider();
+	add("- Sub-Layer 0: ENV SET UP -", 0, false);
+	divider();
+	add("Toggle:", 0, false);
+	add(std::string("* Display Slider [") + (m_displaySliders ? "ON" : "OFF") + "]", MenuDisplaySliders);
+	add(std::string("* CAM VIEW [") + layer3CameraViewName() + "]", MenuCameraView);
+	divider();
+	add("Next Sub-Layer", 0, false);
+	add("* Shoot Particles", MenuShootParticles);
+	divider();
+	return menu;
+}
+
+bool ParticleSimWorkspace::handleMenuCommand(int command, WorkspaceServices& services) {
+	if (!layer3Active()) return false;
+	switch (command) {
+	case MenuDisplaySliders:
+		toggleDisplaySliders(services);
+		return true;
+	case MenuCameraView:
+		setLayer3CameraView(m_layer3CameraView == Layer3CameraView::Orbit
+			? Layer3CameraView::Free : Layer3CameraView::Orbit, services);
+		return true;
+	case MenuShootParticles:
+		// Deliberate no-op until the Shoot Particles checkpoint.
+		return true;
+	default:
+		return false;
+	}
+}
+
+void ParticleSimWorkspace::toggleDisplaySliders(WorkspaceServices& services) {
+	cancelInput(services);
+	m_displaySliders = !m_displaySliders;
+}
+
+void ParticleSimWorkspace::setLayer3CameraView(
+	Layer3CameraView view, WorkspaceServices& services) {
+	cancelInput(services);
+	if (view == Layer3CameraView::Free) {
+		if (!services.camera) return;
+		services.camera->beginFreeView();
+		if (!services.camera->freeViewActive()) return;
+	}
+	else if (services.camera) {
+		services.camera->endFreeView();
+	}
+	m_layer3CameraView = view;
+}
+
+bool ParticleSimWorkspace::setFreeMovementKey(WorkspaceInputAction action, bool pressed) {
+	int index = -1;
+	switch (action) {
+	case WorkspaceInputAction::Previous: index = 0; break;
+	case WorkspaceInputAction::Next: index = 1; break;
+	case WorkspaceInputAction::Decrease: index = 2; break;
+	case WorkspaceInputAction::Increase: index = 3; break;
+	default: return false;
+	}
+	m_freeMovementKeys[index] = pressed;
+	return true;
+}
+
+bool ParticleSimWorkspace::handleInputRelease(
+	const WorkspaceInputEvent& input, WorkspaceServices& services) {
+	(void)services;
+	return setFreeMovementKey(input.action, false);
+}
+
+void ParticleSimWorkspace::cancelInput(WorkspaceServices& services) {
+	(void)services;
+	std::fill(std::begin(m_freeMovementKeys), std::end(m_freeMovementKeys), false);
+	m_freeLookDragging = false;
+	m_sliderDragRow = -1;
+	if (m_runtimeSliders) m_runtimeSliders->panel.SetActive(false);
+}
+
+void ParticleSimWorkspace::applyLiveParameters() {
+	if (!m_particleSystem || !m_runtimeSliders) return;
+	const RuntimeSliders& sliders = *m_runtimeSliders;
+	m_particleSystem->setDamping(sliders.damping);
+	m_particleSystem->setGravity(-sliders.gravity);
+	m_particleSystem->setCollideSpring(sliders.collideSpring);
+	m_particleSystem->setCollideDamping(sliders.collideDamping);
+	m_particleSystem->setCollideShear(sliders.collideShear);
+	m_particleSystem->setCollideAttraction(sliders.collideAttraction);
+	// ballRadius is only a future shoot-brush setting, never a particle radius.
+}
+
+bool ParticleSimWorkspace::handlePointerInput(
+	const WorkspacePointerEvent& input, WorkspaceServices& services) {
+	if (!layer3Active()) return false;
+	using Type = WorkspacePointerEvent::Type;
+	using Button = WorkspacePointerEvent::Button;
+	if (input.type == Type::Button && input.button == Button::Right) {
+		cancelInput(services);
+		return false; // The host exclusively owns the native right-click menu.
+	}
+
+	if (slidersVisible()) {
+		const int rowCount = m_runtimeSliders->panel.GetSize();
+		const bool inside = input.x >= kSliderX && input.x <= kSliderX + kSliderWidth &&
+			input.y >= kSliderY && input.y < kSliderY + rowCount * kSliderRowHeight;
+		if (input.type == Type::Button && input.button == Button::Left) {
+			if (input.pressed && inside) {
+				m_freeLookDragging = false;
+				m_sliderDragRow = (input.y - kSliderY) / kSliderRowHeight;
+				if (m_runtimeSliders->rendered) {
+					// ParamListGL offsets rendering but not mouse X; supply local X.
+					m_runtimeSliders->panel.Mouse(input.x - kSliderX, input.y);
+					applyLiveParameters();
+				}
+				return true;
+			}
+			if (!input.pressed && m_sliderDragRow >= 0) {
+				m_sliderDragRow = -1;
+				return true;
+			}
+		}
+		if (input.type == Type::Motion && m_sliderDragRow >= 0) {
+			if (m_runtimeSliders->rendered) {
+				// Keep the original row captured even when the pointer leaves the panel.
+				m_runtimeSliders->panel.Motion(input.x - kSliderX,
+					kSliderY + m_sliderDragRow * kSliderRowHeight + kSliderRowHeight / 2);
+				applyLiveParameters();
+			}
+			return true;
+		}
+	}
+
+	if (m_layer3CameraView != Layer3CameraView::Free) return false;
+	if (input.type == Type::Button && input.button == Button::Left) {
+		m_freeLookDragging = input.pressed && !m_subLayerPanelOpen;
+		return true;
+	}
+	if (input.type == Type::Motion) {
+		if (m_freeLookDragging && !m_subLayerPanelOpen && services.camera) {
+			services.camera->lookFree(static_cast<float>(input.dx), static_cast<float>(input.dy));
+		}
+		return true;
+	}
+	return false;
+}
+
+void ParticleSimWorkspace::renderOverlay(
+	const WorkspaceFrameContext& frame, WorkspaceServices& services) {
+	(void)services;
+	if (!frame.displayEnabled || !slidersVisible()) return;
+	GLint program = 0;
+	glGetIntegerv(GL_CURRENT_PROGRAM, &program);
+	glPushAttrib(GL_ENABLE_BIT | GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT |
+		GL_DEPTH_BUFFER_BIT | GL_TRANSFORM_BIT);
+	glUseProgram(0);
+	glDisable(GL_DEPTH_TEST);
+	glDepthMask(GL_FALSE);
+	glDisable(GL_LIGHTING);
+	glDisable(GL_TEXTURE_2D);
+	glDisable(GL_BLEND);
+	glDisable(GL_CULL_FACE);
+	glDisable(GL_SCISSOR_TEST);
+	m_runtimeSliders->panel.Render(kSliderX, kSliderY, true);
+	m_runtimeSliders->rendered = true;
+	glPopAttrib();
+	glUseProgram(program);
+}
+
 bool ParticleSimWorkspace::handleLayer1Input(
 	const WorkspaceInputEvent& input,
 	WorkspaceServices& services) {
@@ -210,7 +450,7 @@ bool ParticleSimWorkspace::handleLayer1Input(
 				m_paused = true;
 				m_runtimeEnabled = false;
 				m_textEntry.cancel();
-				m_statusLine = "READY: PARTICLE_SIM Workspace Configuration.";
+				m_statusLine = "READY: PARTICLE_SIM workspace configuration.";
 				m_statusTone = WorkspaceStatusTone::Ready;
 				services.arbiter->setApplicationLayer(
 					TheArbiter::ApplicationLayer::WORKSPACE_CONFIGURATION
@@ -267,6 +507,7 @@ bool ParticleSimWorkspace::handleLayer2Input(
 			m_runtimeEnabled = false;
 
 			if (applyRuntimeConfig()) {
+				setLayer3CameraView(Layer3CameraView::Orbit, services);
 				m_elapsedSimulationTime = 0.0f;
 				m_subLayerPanelOpen = false;
 				m_layer3Selection = Layer3Row::DisplaySliders;
@@ -307,8 +548,16 @@ bool ParticleSimWorkspace::handleLayer3Input(
 	const WorkspaceInputEvent& input,
 	WorkspaceServices& services) {
 
+	// Held keys are updated by time, not OS-repeat; toggles remain edge-triggered.
+	if (input.repeated) return true;
+	if (!m_subLayerPanelOpen && m_layer3CameraView == Layer3CameraView::Free &&
+		setFreeMovementKey(input.action, true)) {
+		return true;
+	}
+
 	switch (input.action) {
 	case WorkspaceInputAction::TogglePanel:
+		cancelInput(services);
 		m_subLayerPanelOpen = !m_subLayerPanelOpen;
 		return true;
 
@@ -322,6 +571,7 @@ bool ParticleSimWorkspace::handleLayer3Input(
 		return true;
 
 	case WorkspaceInputAction::Back:
+		setLayer3CameraView(Layer3CameraView::Orbit, services);
 		m_subLayerPanelOpen = false;
 		m_paused = true;
 		m_runtimeEnabled = false;
@@ -344,12 +594,12 @@ bool ParticleSimWorkspace::handleLayer3Input(
 
 	case WorkspaceInputAction::Decrease:
 		if (!m_subLayerPanelOpen) return false;
-		adjustLayer3Value(-1);
+		adjustLayer3Value(-1, services);
 		return true;
 
 	case WorkspaceInputAction::Increase:
 		if (!m_subLayerPanelOpen) return false;
-		adjustLayer3Value(+1);
+		adjustLayer3Value(+1, services);
 		return true;
 
 	case WorkspaceInputAction::Activate:
@@ -413,20 +663,21 @@ bool ParticleSimWorkspace::handleTextEntry(
 }
 
 void ParticleSimWorkspace::renderConfiguredGrid(
-	WorkspaceServices& services, GridLayout layout) const {
+	WorkspaceServices& services,
+	GridLayout layout) const {
 
 	if (!services.renderer) return;
 
 	EuclidRenderer::UniformGrid grid;
-
 	grid.dimensions = ivec3(
 		static_cast<int>(kGridSize),
 		static_cast<int>(kGridSize),
 		static_cast<int>(kGridSize)
 	);
-
 	grid.origin = m_baseVoxelGrid.origin;
-	grid.cellSize = vec3(kCellSizeM, kCellSizeM, kCellSizeM);
+	grid.cellSize = vec3(
+		kSimulationBoxSizeM / static_cast<float>(kGridSize)
+	);
 	grid.majorEvery = static_cast<int>(kMajorGridEvery);
 
 	EuclidRenderer::GridDisplay display;
@@ -490,45 +741,37 @@ void ParticleSimWorkspace::renderActiveParticles(
 }
 
 WorkspacePresentation ParticleSimWorkspace::buildLayer1Presentation() const {
-	
 	WorkspacePresentation p;
-
 	p.panelVisible = true;
 	p.workspaceName = "LAYER 1 -> MULPHY_SIM WORKSPACE CONFIGURATION";
 	p.layerLabel = "MODE: PARTICLE_SIM";
 
 	WorkspacePanelSection section;
-
 	section.rows.push_back(makeRow(
 		"[1]: MULPHY_SIM SELECTION",
 		"PARTICLE_SIM",
 		m_layer1Selection == Layer1Row::WorkspaceSelection
 	));
-
 	section.rows.push_back(makeRow(
 		"[2]: GRID LAYOUT",
 		gridLayoutName(),
 		m_layer1Selection == Layer1Row::GridLayout
 	));
-
 	section.rows.push_back(makeRow(
 		"[3]: COLOR MODE",
 		colorModeName(),
 		m_layer1Selection == Layer1Row::ColorMode
 	));
-
 	section.rows.push_back(makeRow(
 		"[4]: PARTICLE RADIUS",
 		radiusModeName(),
 		m_layer1Selection == Layer1Row::RadiusMode
 	));
-
 	section.rows.push_back(makeRow(
 		"[5]: PRESS E TO CONFIGURE WORKSPACE",
 		"",
 		m_layer1Selection == Layer1Row::Configure
 	));
-
 	p.sections.push_back(section);
 
 	p.statusLine = m_statusLine;
@@ -798,10 +1041,12 @@ bool ParticleSimWorkspace::applyRuntimeConfig() {
 	return true;
 }
 
-bool ParticleSimWorkspace::resolveRuntimeConfig(RuntimeConfig& resolved) const {
+bool ParticleSimWorkspace::resolveRuntimeConfig(
+	RuntimeConfig& resolved) const {
 
 	if (m_draftConfig.gridLayout == GridLayout::Dynamic ||
-		m_draftConfig.spawnVoxelId >= m_spawnDensityGrid.regionCount(m_baseVoxelGrid)) {
+		m_draftConfig.spawnVoxelId >=
+			m_spawnDensityGrid.regionCount(m_baseVoxelGrid)) {
 		return false;
 	}
 
@@ -815,13 +1060,13 @@ bool ParticleSimWorkspace::resolveRuntimeConfig(RuntimeConfig& resolved) const {
 	if (requestedCount > m_capacity) return false;
 
 	const bool uniformRadiusValid =
-		isfinite(m_draftConfig.uniformRadius) &&
+		std::isfinite(m_draftConfig.uniformRadius) &&
 		m_draftConfig.uniformRadius > 0.0f &&
 		m_draftConfig.uniformRadius <= kMaximumSupportedRadius;
 
 	const bool randomRadiusValid =
-		isfinite(m_draftConfig.minimumRadius) &&
-		isfinite(m_draftConfig.maximumRadius) &&
+		std::isfinite(m_draftConfig.minimumRadius) &&
+		std::isfinite(m_draftConfig.maximumRadius) &&
 		m_draftConfig.minimumRadius > 0.0f &&
 		m_draftConfig.minimumRadius <= m_draftConfig.maximumRadius &&
 		m_draftConfig.maximumRadius <= kMaximumSupportedRadius;
@@ -841,12 +1086,10 @@ bool ParticleSimWorkspace::resolveRuntimeConfig(RuntimeConfig& resolved) const {
 	resolved.uniformRadius = m_draftConfig.uniformRadius;
 	resolved.minimumRadius = m_draftConfig.minimumRadius;
 	resolved.maximumRadius = m_draftConfig.maximumRadius;
-
 	resolved.placementRadius =
 		m_draftConfig.radiusMode == RadiusMode::Random
 		? m_draftConfig.maximumRadius
 		: m_draftConfig.uniformRadius;
-
 	resolved.colorMode = m_draftConfig.colorMode;
 	resolved.radiusMode = m_draftConfig.radiusMode;
 	resolved.resetMode = m_draftConfig.resetMode;
@@ -906,6 +1149,7 @@ void ParticleSimWorkspace::adjustLayer1Value(
 		);
 		break;
 	}
+
 	case Layer1Row::ColorMode:
 		m_draftConfig.colorMode =
 			m_draftConfig.colorMode == ColorMode::Default
@@ -974,7 +1218,8 @@ void ParticleSimWorkspace::adjustLayer2Value(int direction) {
 			? ResetMode::Random
 			: ResetMode::Default;
 	}
-	else if (m_draftConfig.radiusMode == RadiusMode::Uniform && m_layer2Selection == 2) {
+	else if (m_draftConfig.radiusMode == RadiusMode::Uniform &&
+		m_layer2Selection == 2) {
 		const int index = std::clamp(
 			radiusPresetIndex(m_draftConfig.uniformRadius) + step,
 			0,
@@ -982,15 +1227,16 @@ void ParticleSimWorkspace::adjustLayer2Value(int direction) {
 		);
 		m_draftConfig.uniformRadius = radiusPreset(index);
 	}
-	else if (m_draftConfig.radiusMode == RadiusMode::Random && m_layer2Selection == 2) {
+	else if (m_draftConfig.radiusMode == RadiusMode::Random &&
+		m_layer2Selection == 2) {
 		const int current = radiusPresetIndex(m_draftConfig.minimumRadius);
 		const int maximum = radiusPresetIndex(m_draftConfig.maximumRadius);
 		m_draftConfig.minimumRadius = radiusPreset(
 			std::clamp(current + step, 0, maximum)
 		);
 	}
-	else if (m_draftConfig.radiusMode == RadiusMode::Random && m_layer2Selection == 3) {
-		
+	else if (m_draftConfig.radiusMode == RadiusMode::Random &&
+		m_layer2Selection == 3) {
 		const int current = radiusPresetIndex(m_draftConfig.maximumRadius);
 		const int minimum = radiusPresetIndex(m_draftConfig.minimumRadius);
 		m_draftConfig.maximumRadius = radiusPreset(
@@ -998,11 +1244,9 @@ void ParticleSimWorkspace::adjustLayer2Value(int direction) {
 		);
 	}
 	else if (m_layer2Selection == voxelSpawnRowIndex()) {
-
 		const int count = static_cast<int>(
 			m_spawnDensityGrid.regionCount(m_baseVoxelGrid)
 		);
-
 		const int current = static_cast<int>(m_draftConfig.spawnVoxelId);
 		m_draftConfig.spawnVoxelId = static_cast<unsigned int>(
 			(current + step + count) % count
@@ -1013,19 +1257,19 @@ void ParticleSimWorkspace::adjustLayer2Value(int direction) {
 	m_statusTone = WorkspaceStatusTone::Ready;
 }
 
-void ParticleSimWorkspace::adjustLayer3Value(int direction) {
+void ParticleSimWorkspace::adjustLayer3Value(int direction, WorkspaceServices& services) {
 	if (direction == 0) return;
 
 	switch (m_layer3Selection) {
 	case Layer3Row::DisplaySliders:
-		m_displaySliders = !m_displaySliders;
+		toggleDisplaySliders(services);
 		return;
 
 	case Layer3Row::CameraView:
-		m_layer3CameraView =
+		setLayer3CameraView(
 			m_layer3CameraView == Layer3CameraView::Orbit
 			? Layer3CameraView::Free
-			: Layer3CameraView::Orbit;
+			: Layer3CameraView::Orbit, services);
 		return;
 
 	case Layer3Row::ShootParticles:
@@ -1042,8 +1286,8 @@ void ParticleSimWorkspace::beginParticleAmountEntry() {
 		"PARTICLE AMOUNT",
 		0,
 		maximum,
-		initial)) {
-
+		initial
+	)) {
 		m_statusLine = "ENTER RGB particle amount; E/ENTER commits.";
 		m_statusTone = WorkspaceStatusTone::Neutral;
 	}
@@ -1157,9 +1401,7 @@ const char* ParticleSimWorkspace::gridLayoutName() const {
 }
 
 const char* ParticleSimWorkspace::colorModeName() const {
-	return m_draftConfig.colorMode == ColorMode::RGB 
-		? "RGB" 
-		: "DEFAULT";
+	return m_draftConfig.colorMode == ColorMode::RGB ? "RGB" : "DEFAULT";
 }
 
 const char* ParticleSimWorkspace::radiusModeName() const {

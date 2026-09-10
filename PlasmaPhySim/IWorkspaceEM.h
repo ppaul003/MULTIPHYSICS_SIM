@@ -4,6 +4,7 @@
 #include "WorkspaceContextEM.h"
 #include "WorkspaceInputEM.h"
 #include "WorkspacePresentationEM.h"
+#include "WorkspaceMenuEM.h"
 
 class IWorkspace {
 public:
@@ -26,6 +27,40 @@ public:
         WorkspaceServices& services) = 0;
 
     virtual WorkspacePresentation buildPresentation() const = 0;
+
+    virtual WorkspaceMenuPresentation buildMenu() const {
+        return WorkspaceMenuPresentation{};
+    }
+
+    virtual bool handleMenuCommand(int command, WorkspaceServices& services) {
+        (void)command;
+        (void)services;
+        return false;
+    }
+
+    virtual bool handleInputRelease(
+        const WorkspaceInputEvent& input, WorkspaceServices& services) {
+        (void)input;
+        (void)services;
+        return false;
+    }
+
+    virtual bool handlePointerInput(
+        const WorkspacePointerEvent& input, WorkspaceServices& services) {
+        (void)input;
+        (void)services;
+        return false;
+    }
+
+    virtual void cancelInput(WorkspaceServices& services) {
+        (void)services;
+    }
+
+    virtual void renderOverlay(
+        const WorkspaceFrameContext& frame, WorkspaceServices& services) {
+        (void)frame;
+        (void)services;
+    }
 };
 
 #endif

@@ -73,6 +73,8 @@ public:
     TheArbiter();
 
     ArbiterResult routeKeyboard(const KeyboardInput::KeyEvent& event) const;
+    WorkspacePointerEvent translateMouseButton(int button, int state, int x, int y) const;
+    WorkspacePointerEvent translateMouseMotion(int x, int y, int dx, int dy) const;
 
     void setApplicationLayer(ApplicationLayer layer) { m_navigation.layer = layer; }
     ApplicationLayer getApplicationLayer() const { return m_navigation.layer; }
