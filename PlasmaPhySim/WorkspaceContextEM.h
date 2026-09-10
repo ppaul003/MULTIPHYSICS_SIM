@@ -78,6 +78,8 @@ struct SpawnDensityRegion3D {
     glm::vec3 halfExtent = glm::vec3(0.0f);
     float volumeM3 = 0.0f;
     std::array<SpatialVoxelRegion, 8> constituentBaseVoxels{};
+
+
 };
 
 // Composite selection grid layered over SpatialVoxelGrid3D. The base grid
@@ -109,25 +111,28 @@ struct SpawnDensityRegionGrid3D {
     unsigned int regionCount(const SpatialVoxelGrid3D& baseGrid) const {
         const glm::ivec3 regionDimensions = dimensions(baseGrid);
         return static_cast<unsigned int>(
-            regionDimensions.x * regionDimensions.y * regionDimensions.z
+            regionDimensions.x * 
+            regionDimensions.y * 
+            regionDimensions.z
         );
     }
 
-    bool region(
-        const SpatialVoxelGrid3D& baseGrid,
-        unsigned int id,
-        SpawnDensityRegion3D& result
-    ) const {
+    unsigned int selectionCount(const SpatialVoxelGrid3D& baseGrid) const {
+        return regionCount(baseGrid) + 1;
+    }
+
+    bool region(const SpatialVoxelGrid3D& baseGrid,
+        unsigned int id, SpawnDensityRegion3D& result) const {
+
         const glm::ivec3 regionDimensions = dimensions(baseGrid);
         const unsigned int count = regionCount(baseGrid);
         if (id >= count || baseGrid.voxelEdgeM <= 0.0f) {
             return false;
         }
 
-        const unsigned int dimensionX =
-            static_cast<unsigned int>(regionDimensions.x);
-        const unsigned int dimensionY =
-            static_cast<unsigned int>(regionDimensions.y);
+        const unsigned int dimensionX = static_cast<unsigned int>(regionDimensions.x);
+        const unsigned int dimensionY = static_cast<unsigned int>(regionDimensions.y);
+
         const unsigned int regionX = id % dimensionX;
         const unsigned int regionY = (id / dimensionX) % dimensionY;
         const unsigned int regionZ = id / (dimensionX * dimensionY);
@@ -137,6 +142,7 @@ struct SpawnDensityRegionGrid3D {
             static_cast<int>(regionY) * baseVoxelSpan.y,
             static_cast<int>(regionZ) * baseVoxelSpan.z
         );
+
         const std::array<glm::ivec3, 8> baseIndices = {{
             baseOrigin + glm::ivec3(0, 0, 0),
             baseOrigin + glm::ivec3(1, 0, 0),
@@ -152,7 +158,8 @@ struct SpawnDensityRegionGrid3D {
             static_cast<unsigned int>(baseGrid.dimensions.x);
         const unsigned int baseDimensionY =
             static_cast<unsigned int>(baseGrid.dimensions.y);
-        for (std::size_t i = 0; i < baseIndices.size(); ++i) {
+
+        for (std::size_t i = 0; i < baseIndices.size(); i++) {
             const glm::ivec3& baseIndex = baseIndices[i];
             const unsigned int baseId =
                 static_cast<unsigned int>(baseIndex.x) +
@@ -160,29 +167,130 @@ struct SpawnDensityRegionGrid3D {
                 baseDimensionX * baseDimensionY *
                     static_cast<unsigned int>(baseIndex.z);
 
-            if (!baseGrid.region(
-                baseId,
-                result.constituentBaseVoxels[i]
-            )) {
+            if (!baseGrid.region(baseId, result.constituentBaseVoxels[i])) {
                 return false;
             }
         }
 
-        const glm::vec3 regionSize = glm::vec3(baseVoxelSpan) *
-            baseGrid.voxelEdgeM;
+        const glm::vec3 regionSize =
+            glm::vec3(baseVoxelSpan) * baseGrid.voxelEdgeM;
+
         result.id = id;
+
         result.index = glm::ivec3(
             static_cast<int>(regionX),
             static_cast<int>(regionY),
             static_cast<int>(regionZ)
         );
-        result.minimum = baseGrid.origin + glm::vec3(baseOrigin) *
-            baseGrid.voxelEdgeM;
+
+        result.minimum = baseGrid.origin + glm::vec3(baseOrigin) * baseGrid.voxelEdgeM;
         result.maximum = result.minimum + regionSize;
         result.center = (result.minimum + result.maximum) * 0.5f;
         result.halfExtent = regionSize * 0.5f;
         result.volumeM3 = regionSize.x * regionSize.y * regionSize.z;
         return true;
+    }
+
+    bool centeredRegion(
+        const SpatialVoxelGrid3D& baseGrid, 
+        SpawnDensityRegion3D& result) const {
+
+        if (baseVoxelSpan.x <= 0 ||
+            baseVoxelSpan.y <= 0 ||
+            baseVoxelSpan.z <= 0 ||
+            baseGrid.dimensions.x < baseVoxelSpan.x ||
+            baseGrid.dimensions.y < baseVoxelSpan.y ||
+            baseGrid.dimensions.z < baseVoxelSpan.z ||
+            baseGrid.voxelEdgeM <= 0.0f) {
+            return false;
+        }
+
+        // Difference must be even along every dimension
+        // so the selected block can be centered exactly.
+        const glm::ivec3 remaining =
+            baseGrid.dimensions - baseVoxelSpan;
+
+        if ((remaining.x % 2) != 0 ||
+            (remaining.y % 2) != 0 ||
+            (remaining.z % 2) != 0) {
+            return false;
+        }
+
+        // 8x8x8 base grid with a 2x2x2 spawn volume:
+        //
+        // (8 - 2) / 2 = 3
+        //
+        // Therefore the centered region starts at
+        // base voxel index (3,3,3).
+        const glm::ivec3 baseOrigin =
+            remaining / 2;
+
+        const std::array<glm::ivec3, 8> baseIndices = { {
+            baseOrigin + glm::ivec3(0, 0, 0),
+            baseOrigin + glm::ivec3(1, 0, 0),
+            baseOrigin + glm::ivec3(0, 1, 0),
+            baseOrigin + glm::ivec3(1, 1, 0),
+
+            baseOrigin + glm::ivec3(0, 0, 1),
+            baseOrigin + glm::ivec3(1, 0, 1),
+            baseOrigin + glm::ivec3(0, 1, 1),
+            baseOrigin + glm::ivec3(1, 1, 1)
+        } };
+
+        const unsigned int baseDimensionX = static_cast<unsigned int>(baseGrid.dimensions.x);
+        const unsigned int baseDimensionY = static_cast<unsigned int>(baseGrid.dimensions.y);
+
+        for (std::size_t i = 0; i < baseIndices.size(); i++) {
+            const glm::ivec3& baseIndex = baseIndices[i];
+            const unsigned int baseId = static_cast<unsigned int>(baseIndex.x) +
+                baseDimensionX * static_cast<unsigned int>(baseIndex.y) +
+                baseDimensionX * baseDimensionY * static_cast<unsigned int>(baseIndex.z);
+
+            if (!baseGrid.region(baseId, result.constituentBaseVoxels[i])) {
+                return false;
+            }
+        }
+
+        const glm::vec3 regionSize = glm::vec3(baseVoxelSpan) * baseGrid.voxelEdgeM;
+        result.id = regionCount(baseGrid);
+
+        // Special region: not a regular 4x4x4 region index.
+        result.index = glm::ivec3(-1);
+        result.minimum = baseGrid.origin +
+            glm::vec3(baseOrigin) * baseGrid.voxelEdgeM;
+
+        result.maximum = result.minimum + regionSize;
+        result.center = (result.minimum + result.maximum) *  0.5f;
+        result.halfExtent = regionSize * 0.5f;
+
+        result.volumeM3 =
+            regionSize.x *
+            regionSize.y *
+            regionSize.z;
+
+        return true;
+    }
+
+    bool selection(
+        const SpatialVoxelGrid3D& baseGrid, 
+        unsigned int selectionIndex, 
+        SpawnDensityRegion3D& result) const {
+
+        // Selection 0 is the special center volume.
+        if (selectionIndex == 0) {
+            return centeredRegion(baseGrid, result);
+        }
+
+        // Everything after CENTER maps to the existing
+        // physical region IDs.
+        //
+        // selection 1  -> region 0
+        // selection 2  -> region 1
+        // ...
+        // selection 64 -> region 63
+        const unsigned int regularRegionId = selectionIndex - 1;
+
+        return region(baseGrid, regularRegionId, result);
     }
 };
 

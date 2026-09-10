@@ -106,7 +106,7 @@ private:
         float electronTemperature = 0.0f;
         float ionTemperature = 0.0f;
         float neutralTemperature = 0.0f;
-        unsigned int spawnVoxelId = 0;
+        unsigned int spawnSelectionIndex = 0;
     };
 
     struct ParticleVisual {
@@ -146,10 +146,7 @@ private:
 
     void refreshLayer1Status();
 
-    bool isVoxelSpawnRowSelected() const;
-    int voxelSpawnRowIndex() const;
-
-    static std::string voxelText(unsigned int voxelId);
+    static std::string spawnSelectionText(unsigned int selectionIndex);
 
     const char* gridLayoutName() const;
     const char* multiphysicsModeName() const;

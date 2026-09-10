@@ -270,7 +270,7 @@ void MultiPhysicsSimWorkspace::renderSelectedSpawnRegion(WorkspaceServices& serv
     SpawnDensityRegion3D selectedRegion;
     if (!m_spawnDensityGrid.region(
         m_baseVoxelGrid,
-        m_draftConfig.spawnVoxelId,
+        m_draftConfig.spawnSelectionIndex,
         selectedRegion)) {
 
         return;
@@ -425,7 +425,7 @@ MultiPhysicsSimWorkspace::buildLayer2Presentation() const {
 
     section.rows.push_back(makeRow(
         "[7]: SELECT VOXEL SPAWN", 
-        voxelText(m_draftConfig.spawnVoxelId), 
+        spawnSelectionText(m_draftConfig.spawnSelectionIndex), 
         m_layer2Selection == Layer2Row::VoxelSpawn
     ));
 
@@ -610,9 +610,9 @@ void MultiPhysicsSimWorkspace::adjustLayer2Value(int direction) {
         );
 
         if (count == 0) break;
-        const int current = static_cast<int>(m_draftConfig.spawnVoxelId);
+        const int current = static_cast<int>(m_draftConfig.spawnSelectionIndex);
 
-        m_draftConfig.spawnVoxelId = static_cast<unsigned int>(
+        m_draftConfig.spawnSelectionIndex = static_cast<unsigned int>(
             (current + step + static_cast<int>(count)) % static_cast<int>(count)
         );
         break;
@@ -731,9 +731,14 @@ unsigned int MultiPhysicsSimWorkspace::requestedMarkerCount() const {
     return neutralCount() + ionCount() + electronCount();
 }
 
-string MultiPhysicsSimWorkspace::voxelText(unsigned int voxelId) {
+string MultiPhysicsSimWorkspace::spawnSelectionText(unsigned int selectionIndex) {
     ostringstream stream;
-    stream << "VOXEL_" << setw(3) << setfill('0') << voxelId;
+    stream
+        << "VOXEL_"
+        << setw(3)
+        << setfill('0')
+        << selectionIndex;
+
     return stream.str();
 }
 

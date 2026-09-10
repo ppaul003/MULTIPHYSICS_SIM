@@ -114,7 +114,7 @@ private:
 		float uniformRadius = 0.0120f;
 		float minimumRadius = 0.0098f;
 		float maximumRadius = 0.0156f;
-		unsigned int spawnVoxelId = 21;
+		unsigned int spawnSelectionIndex = 0;
 	};
 
 	struct RuntimeConfig {
@@ -134,7 +134,7 @@ private:
 		ResetMode resetMode = ResetMode::Default;
 		GridLayout gridLayout = GridLayout::None;
 
-		unsigned int selectedSpawnRegionId = 21;
+		unsigned int selectedSpawnSelectionIndex = 0;
 		float selectedSpawnVolumeM3 = 0.0f;
 		unsigned int activeMacroParticleCount = 0;
 	};
@@ -191,8 +191,9 @@ private:
 
 	static int radiusPresetIndex(float radius);
 	static float radiusPreset(int index);
+
 	static std::string radiusText(float radius);
-	static std::string voxelText(unsigned int voxelId);
+	static std::string spawnSelectionText(unsigned int selectionIndex);
 
 	const char* gridLayoutName() const;
 	const char* colorModeName() const;

@@ -695,11 +695,10 @@ void ParticleSimWorkspace::renderSelectedSpawnRegion(
 	if (!services.renderer) return;
 
 	SpawnDensityRegion3D selectedRegion;
-	if (!m_spawnDensityGrid.region(
+	if (!m_spawnDensityGrid.selection(
 		m_baseVoxelGrid,
-		m_draftConfig.spawnVoxelId,
-		selectedRegion
-	)) {
+		m_draftConfig.spawnSelectionIndex,
+		selectedRegion)) {
 		return;
 	}
 
@@ -818,7 +817,7 @@ WorkspacePresentation ParticleSimWorkspace::buildLayer2Presentation() const {
 		);
 
 		section.rows.push_back(
-			makeRow("[4]: SELECT VOXEL SPAWN", voxelText(m_draftConfig.spawnVoxelId), m_layer2Selection == 3)
+			makeRow("[4]: SELECT VOXEL SPAWN", spawnSelectionText(m_draftConfig.spawnSelectionIndex), m_layer2Selection == 3)
 		);
 
 		section.rows.push_back(
@@ -835,7 +834,7 @@ WorkspacePresentation ParticleSimWorkspace::buildLayer2Presentation() const {
 		);
 
 		section.rows.push_back(
-			makeRow("[5]: SELECT VOXEL SPAWN", voxelText(m_draftConfig.spawnVoxelId), m_layer2Selection == 4)
+			makeRow("[5]: SELECT VOXEL SPAWN", spawnSelectionText(m_draftConfig.spawnSelectionIndex), m_layer2Selection == 4)
 		);
 
 		section.rows.push_back(
@@ -974,9 +973,8 @@ bool ParticleSimWorkspace::applyRuntimeConfig() {
 	SpawnDensityRegion3D selectedRegion;
 	if (!m_spawnDensityGrid.region(
 		m_baseVoxelGrid,
-		resolved.selectedSpawnRegionId,
-		selectedRegion
-	)) {
+		resolved.selectedSpawnSelectionIndex,
+		selectedRegion)) {
 		return false;
 	}
 
@@ -998,8 +996,7 @@ bool ParticleSimWorkspace::applyRuntimeConfig() {
 			selectedRegion.maximum.z
 		),
 		resolved.placementRadius,
-		kResetSeed
-	)) {
+		kResetSeed)) {
 		return false;
 	}
 
@@ -1011,14 +1008,14 @@ bool ParticleSimWorkspace::applyRuntimeConfig() {
 			resolved.maximumRadius,
 			kResetSeed
 		);
+
 	if (!radiusApplied) return false;
 
 	if (resolved.colorMode == ColorMode::RGB) {
 		if (!m_particleSystem->setRGBParticleCounts(
 			resolved.redCount,
 			resolved.greenCount,
-			resolved.blueCount
-		)) {
+			resolved.blueCount)) {
 			return false;
 		}
 	}
@@ -1041,12 +1038,11 @@ bool ParticleSimWorkspace::applyRuntimeConfig() {
 	return true;
 }
 
-bool ParticleSimWorkspace::resolveRuntimeConfig(
-	RuntimeConfig& resolved) const {
+bool ParticleSimWorkspace::resolveRuntimeConfig(RuntimeConfig& resolved) const {
 
 	if (m_draftConfig.gridLayout == GridLayout::Dynamic ||
-		m_draftConfig.spawnVoxelId >=
-			m_spawnDensityGrid.regionCount(m_baseVoxelGrid)) {
+		m_draftConfig.spawnSelectionIndex >= 
+		m_spawnDensityGrid.selectionCount(m_baseVoxelGrid)) {
 		return false;
 	}
 
@@ -1094,7 +1090,7 @@ bool ParticleSimWorkspace::resolveRuntimeConfig(
 	resolved.radiusMode = m_draftConfig.radiusMode;
 	resolved.resetMode = m_draftConfig.resetMode;
 	resolved.gridLayout = m_draftConfig.gridLayout;
-	resolved.selectedSpawnRegionId = m_draftConfig.spawnVoxelId;
+	resolved.selectedSpawnSelectionIndex = m_draftConfig.spawnSelectionIndex;
 	return true;
 }
 
@@ -1218,8 +1214,7 @@ void ParticleSimWorkspace::adjustLayer2Value(int direction) {
 			? ResetMode::Random
 			: ResetMode::Default;
 	}
-	else if (m_draftConfig.radiusMode == RadiusMode::Uniform &&
-		m_layer2Selection == 2) {
+	else if (m_draftConfig.radiusMode == RadiusMode::Uniform && m_layer2Selection == 2) {
 		const int index = std::clamp(
 			radiusPresetIndex(m_draftConfig.uniformRadius) + step,
 			0,
@@ -1227,16 +1222,14 @@ void ParticleSimWorkspace::adjustLayer2Value(int direction) {
 		);
 		m_draftConfig.uniformRadius = radiusPreset(index);
 	}
-	else if (m_draftConfig.radiusMode == RadiusMode::Random &&
-		m_layer2Selection == 2) {
+	else if (m_draftConfig.radiusMode == RadiusMode::Random && m_layer2Selection == 2) {
 		const int current = radiusPresetIndex(m_draftConfig.minimumRadius);
 		const int maximum = radiusPresetIndex(m_draftConfig.maximumRadius);
 		m_draftConfig.minimumRadius = radiusPreset(
 			std::clamp(current + step, 0, maximum)
 		);
 	}
-	else if (m_draftConfig.radiusMode == RadiusMode::Random &&
-		m_layer2Selection == 3) {
+	else if (m_draftConfig.radiusMode == RadiusMode::Random && m_layer2Selection == 3) {
 		const int current = radiusPresetIndex(m_draftConfig.maximumRadius);
 		const int minimum = radiusPresetIndex(m_draftConfig.minimumRadius);
 		m_draftConfig.maximumRadius = radiusPreset(
@@ -1245,10 +1238,12 @@ void ParticleSimWorkspace::adjustLayer2Value(int direction) {
 	}
 	else if (m_layer2Selection == voxelSpawnRowIndex()) {
 		const int count = static_cast<int>(
-			m_spawnDensityGrid.regionCount(m_baseVoxelGrid)
+			m_spawnDensityGrid.selectionCount(m_baseVoxelGrid)
 		);
-		const int current = static_cast<int>(m_draftConfig.spawnVoxelId);
-		m_draftConfig.spawnVoxelId = static_cast<unsigned int>(
+
+		if (count <= 0) return;
+		const int current = static_cast<int>(m_draftConfig.spawnSelectionIndex);
+		m_draftConfig.spawnSelectionIndex = static_cast<unsigned int>(
 			(current + step + count) % count
 		);
 	}
@@ -1384,9 +1379,17 @@ string ParticleSimWorkspace::radiusText(float radius) {
 	return stream.str();
 }
 
-string ParticleSimWorkspace::voxelText(unsigned int voxelId) {
+string ParticleSimWorkspace::spawnSelectionText(unsigned int selectionIndex) {
+	if (selectionIndex == 0) return "VOXEL_CENTER";
+	const unsigned int voxelId = selectionIndex - 1;
 	ostringstream stream;
-	stream << "VOXEL_" << setw(3) << setfill('0') << voxelId;
+
+	stream
+		<< "VOXEL_"
+		<< setw(3)
+		<< setfill('0')
+		<< voxelId;
+
 	return stream.str();
 }
 
