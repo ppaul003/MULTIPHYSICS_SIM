@@ -70,6 +70,7 @@ static const char* lightVertShader = STRINGIFY(
 );
 
 static const char* lightFragShader = STRINGIFY(
+	uniform float emissiveIntensity;
 	void main() {
 		vec2 uv = gl_TexCoord[0].xy * 2.0 - 1.0;
 		float r2 = dot(uv, uv);
@@ -86,7 +87,7 @@ static const char* lightFragShader = STRINGIFY(
 
 		vec4 color = gl_Color;
 
-		vec3 emissive = color.rgb * intensity;
+		vec3 emissive = color.rgb * intensity * emissiveIntensity;
 		float alpha = color.a * clamp(glow + core * 0.5, 0.0, 1.0);
 
 		gl_FragColor = vec4(emissive, alpha);

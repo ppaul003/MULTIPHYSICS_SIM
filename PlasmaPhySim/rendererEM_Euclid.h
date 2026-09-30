@@ -243,7 +243,8 @@ public:
 	void displayParticleRange(
 		int start, 
 		int count, 
-		bool emissive
+		bool emissive,
+		float emissiveIntensity = 1.0f
 	);
 
 private:

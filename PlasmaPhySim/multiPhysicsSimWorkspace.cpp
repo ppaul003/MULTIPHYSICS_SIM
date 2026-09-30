@@ -1,4 +1,4 @@
-﻿#include "multiPhysicsSimWorkspace.h"
+#include "multiPhysicsSimWorkspace.h"
 
 #include "rendererEM_Euclid.h"
 
@@ -122,6 +122,7 @@ void MultiPhysicsSimWorkspace::render(
 
     case TheArbiter::ApplicationLayer::WORKSPACE_CONFIGURATION:
         renderConfiguredGrid(services, m_draftConfig.gridLayout);
+        if (m_runtimeEnabled) renderActivePlasmaMarkers(services);
         if (m_layer2Selection == Layer2Row::VoxelSpawn) {
             renderSelectedSpawnRegion(services);
         }
@@ -129,7 +130,6 @@ void MultiPhysicsSimWorkspace::render(
 
     case TheArbiter::ApplicationLayer::ACTIVE_WORKSPACE:
         renderConfiguredGrid(services, m_runtimeConfig.gridLayout);
-        renderRuntimeSpawnRegion(services);
         renderActivePlasmaMarkers(services);
         return;
 
@@ -137,26 +137,6 @@ void MultiPhysicsSimWorkspace::render(
     default:
         return;
 
-    }
-}
-
-void MultiPhysicsSimWorkspace::renderRuntimeSpawnRegion(WorkspaceServices& services) const {
-    if (!services.renderer) return;
-
-    SpawnDensityRegion3D region;
-
-    if (!m_spawnDensityGrid.selection(
-        m_baseVoxelGrid,
-        m_runtimeConfig.selectedSpawnSelectionIndex,
-        region)) return;
-
-    for (const SpatialVoxelRegion& voxel : region.constituentBaseVoxels) {
-
-        services.renderer->drawHighlightedVoxel(
-            voxel.center,
-            voxel.halfExtent,
-            1.0f
-        );
     }
 }
 
@@ -204,17 +184,23 @@ void MultiPhysicsSimWorkspace::renderActivePlasmaMarkers(WorkspaceServices& serv
         false
     );
 
+    // Visual brightness multiplier; does not affect particle physics or size.
+    constexpr float kIonEmissionIntensity = 2.5f;
+    constexpr float kElectronEmissionIntensity = 2.5f;
+
     // EMISSIVE OVERLAY
     renderer.displayParticleRange(
         ionStart,
         static_cast<int>(m_runtimeConfig.ionCount),
-        true
+        true,
+        kIonEmissionIntensity
     );
 
     renderer.displayParticleRange(
         electronStart,
         static_cast<int>(m_runtimeConfig.electronCount),
-        true
+        true,
+        kElectronEmissionIntensity
     );
 }
 
@@ -281,7 +267,7 @@ bool MultiPhysicsSimWorkspace::configureRuntimeVisuals() {
 
         m_radii[i] = speciesRadius;
 
-        // Normal Argon/species base color
+        // Neutral species: standard shaded red.
         m_colors[i] = make_float4(1.0f, 0.05f, 0.0f, 1.0f);
     }
 
@@ -290,8 +276,8 @@ bool MultiPhysicsSimWorkspace::configureRuntimeVisuals() {
 
         m_radii[i] = speciesRadius;
 
-        // emissive pass ion
-        m_colors[i] = make_float4(1.0f, 0.20f, 0.02f, 1.0f);
+        // Ion species: emissive green.
+        m_colors[i] = make_float4(0.05f, 1.00f, 0.02f, 1.0f);
     }
 
     // Electron
@@ -299,7 +285,7 @@ bool MultiPhysicsSimWorkspace::configureRuntimeVisuals() {
 
         m_radii[i] = kElectronRadius;
         
-        m_colors[i] = make_float4(0.65, 0.20f, 1.00f, 1.0f);
+        m_colors[i] = make_float4(0.05f, 0.25f, 1.00f, 1.0f);
     }
 
     if (!m_particleSystem->setActiveRadii(m_radii.data(), markerEnd))
@@ -311,6 +297,33 @@ bool MultiPhysicsSimWorkspace::configureRuntimeVisuals() {
     return true;
 }
 
+bool MultiPhysicsSimWorkspace::runtimeMatchesDraft() const {
+    // Compare values, not edit events: changing a value back should resume.
+    const auto sameFloat = [](float a, float b) {
+        return std::fabs(a - b) <= 1.0e-5f;
+    };
+    return m_runtimeEnabled &&
+        m_runtimeConfig.particleSpecies == m_draftConfig.particleSpecies &&
+        m_runtimeConfig.totalGasCount == m_draftConfig.totalGasDensity &&
+        sameFloat(m_runtimeConfig.ionizationFraction, m_draftConfig.ionizationFraction) &&
+        sameFloat(m_runtimeConfig.electronTemperatureEv, m_draftConfig.electronTemperature) &&
+        sameFloat(m_runtimeConfig.ionTemperatureEv, m_draftConfig.ionTemperature) &&
+        sameFloat(m_runtimeConfig.neutralTemperatureK, m_draftConfig.neutralTemperature) &&
+        m_runtimeConfig.selectedSpawnSelectionIndex == m_draftConfig.spawnSelectionIndex &&
+        m_runtimeConfig.gridLayout == m_draftConfig.gridLayout;
+}
+
+void MultiPhysicsSimWorkspace::clearRuntime() {
+    m_paused = true;
+    m_runtimeEnabled = false;
+    m_activeMarkerCount = 0;
+    m_elapsedSimulationTime = 0.0f;
+    m_runtimeConfig = RuntimeConfig{};
+    m_radii.clear();
+    m_colors.clear();
+    if (m_particleSystem) m_particleSystem->setActiveParticleCount(0);
+}
+
 bool MultiPhysicsSimWorkspace::applyRuntimeConfig() {
     if (!m_particleSystem) return false;
 
@@ -319,15 +332,19 @@ bool MultiPhysicsSimWorkspace::applyRuntimeConfig() {
     if (!resolveRuntimeConfig(resolved))
         return false;
 
-    if (!m_particleSystem->setActiveParticleCount(resolved.activeMarkerCount))
-        return false;
-
     SpawnDensityRegion3D spawnRegion;
 
     if (!m_spawnDensityGrid.selection(
         m_baseVoxelGrid,
         resolved.selectedSpawnSelectionIndex, 
         spawnRegion))
+        return false;
+
+    // Validation above preserves the paused preview on invalid draft settings.
+    // Once buffers are mutated, do not expose a partially configured runtime.
+    m_runtimeEnabled = false;
+    m_activeMarkerCount = 0;
+    if (!m_particleSystem->setActiveParticleCount(resolved.activeMarkerCount))
         return false;
 
     if (!m_particleSystem->resetInBounds(
@@ -412,6 +429,7 @@ bool MultiPhysicsSimWorkspace::handleLayer1Input(
                 return true;
             }
 
+            clearRuntime();
             m_layer2Selection = Layer2Row::ParticleSpecies;
             m_textEntry.cancel();
             
@@ -474,11 +492,11 @@ bool MultiPhysicsSimWorkspace::handleLayer2Input(
         if (m_layer2Selection == Layer2Row::RunSimulation) {
             
             m_paused = true;
-            m_runtimeEnabled = false;
+            const bool resumeExisting = runtimeMatchesDraft();
 
-            if (applyRuntimeConfig()) {
+            if (resumeExisting || applyRuntimeConfig()) {
 
-                m_elapsedSimulationTime = 0.0f;
+                if (!resumeExisting) m_elapsedSimulationTime = 0.0f;
 
                 m_paused = false;
                 m_runtimeEnabled = true;
@@ -543,7 +561,8 @@ bool MultiPhysicsSimWorkspace::handleLayer3Input(
     case WorkspaceInputAction::Back:
         
         m_paused = true;
-        m_runtimeEnabled = false;
+        m_statusLine = "PAUSED: E on RUN SIM resumes; changed settings restart on E.";
+        m_statusTone = WorkspaceStatusTone::Neutral;
 
         services.arbiter->setApplicationLayer(TheArbiter::ApplicationLayer::WORKSPACE_CONFIGURATION);
 

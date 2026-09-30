@@ -1180,6 +1180,7 @@ void EuclidRenderer::display(DisplayMode mode) {
             glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 
             glUseProgram(m_program1);
+            glUniform1f(glGetUniformLocation(m_program1, "emissiveIntensity"), 1.0f);
             glUniform1f(
                 glGetUniformLocation(m_program1, "pointScale"),
                 m_window_h / tanf(m_fov * 0.5f * (float)M_PI / 180.0f)
@@ -1742,7 +1743,8 @@ void EuclidRenderer::setGrid(
 void EuclidRenderer::displayParticleRange(
     int start,
     int count,
-    bool emissive) {
+    bool emissive,
+    float emissiveIntensity) {
 
     if (start < 0 ||
         count <= 0 ||
@@ -1757,14 +1759,24 @@ void EuclidRenderer::displayParticleRange(
     if (program == 0) return;
     if (m_vbo == 0 || m_radVBO == 0) return;
 
+    // Preserve the caller's blend and depth state across each population pass.
+    glPushAttrib(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ENABLE_BIT);
     glEnable(GL_POINT_SPRITE_ARB);
     glTexEnvi(GL_POINT_SPRITE_ARB, GL_COORD_REPLACE_ARB, GL_TRUE);
     glEnable(GL_VERTEX_PROGRAM_POINT_SIZE_NV);
 
     glEnable(GL_DEPTH_TEST);
-    glDepthMask(GL_TRUE);
+    // Overlay positions equal the opaque spheres: accept equal depth, but
+    // retain opaque depth so emission cannot shine through nearer particles.
+    glDepthFunc(emissive ? GL_LEQUAL : GL_LESS);
+    glDepthMask(emissive ? GL_FALSE : GL_TRUE);
+    glDisable(GL_BLEND);
 
     glUseProgram(program);
+    if (emissive) {
+        glUniform1f(glGetUniformLocation(program, "emissiveIntensity"),
+            (std::max)(0.0f, emissiveIntensity));
+    }
 
     const GLint pointScaleLocation =
         glGetUniformLocation(program, "pointScale");
@@ -1790,6 +1802,7 @@ void EuclidRenderer::displayParticleRange(
 
     glUseProgram(0);
     glDisable(GL_POINT_SPRITE_ARB);
+    glPopAttrib();
 }
 
 // =============================================================================

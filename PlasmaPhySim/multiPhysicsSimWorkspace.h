@@ -157,6 +157,8 @@ private:
 
     bool handleLayer2TextEntry(const WorkspaceInputEvent& input);
 
+    bool runtimeMatchesDraft() const;
+    void clearRuntime();
     bool applyRuntimeConfig();
     bool resolveRuntimeConfig(RuntimeConfig& resolved) const;
     bool configureRuntimeVisuals();
@@ -181,7 +183,6 @@ private:
 
     void refreshLayer1Status();
 
-    void renderRuntimeSpawnRegion(WorkspaceServices& services) const;
     void renderActivePlasmaMarkers(WorkspaceServices& services);
 
     static std::string spawnSelectionText(unsigned int selectionIndex);
