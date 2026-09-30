@@ -85,6 +85,8 @@ public:
 	
 	void update(float deltaTime);
 	void reset(ParticleConfig config);
+	void setDefaultColorRamp();
+
 	bool resetInBounds(
 		ParticleConfig config,
 		const float3& minimum,
@@ -92,18 +94,23 @@ public:
 		float placementRadius,
 		uint seed = 1973
 	);
-	void setDefaultColorRamp();
+	
 	bool setRGBParticleCounts(
 		uint redCount,
 		uint greenCount,
 		uint blueCount
 	);
-	bool setUniformActiveRadii(float radius);
+
 	bool setRandomActiveRadii(
 		float minimumRadius,
 		float maximumRadius,
 		uint seed = 1973
 	);
+
+	bool setUniformActiveRadii(float radius);
+	bool setActiveRadii(const float* radii, uint count);
+	bool setActiveColors(const float4* colors, uint count);
+
 	void setUniformParticleColor(float r, float g, float b, float a = 1.0f);
 	void setParticle(ParticleArray array, int index, float* data);
 	void setArray(ParticleArray array, const float* data, int start, int count);

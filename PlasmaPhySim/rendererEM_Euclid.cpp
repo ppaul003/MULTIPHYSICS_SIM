@@ -1089,6 +1089,20 @@ void EuclidRenderer::_initialize() {
 }
 
 void EuclidRenderer::_drawPoints(bool useColorBuffer) {
+    
+    _drawPointsRange(
+        0,
+        m_numParticles,
+        useColorBuffer
+    );
+}
+
+
+void EuclidRenderer::_drawPointsRange(
+    int start, 
+    int count, 
+    bool useColorBuffer) {
+
     glBindBufferARB(GL_ARRAY_BUFFER_ARB, m_vbo);
 
     glVertexPointer(4, GL_FLOAT, 0, 0);
@@ -1108,7 +1122,7 @@ void EuclidRenderer::_drawPoints(bool useColorBuffer) {
         glEnableClientState(GL_COLOR_ARRAY);
     }
 
-    glDrawArrays(GL_POINTS, 0, m_numParticles);
+    glDrawArrays(GL_POINTS, start, count);
 
     glDisableClientState(GL_VERTEX_ARRAY);
     glDisableVertexAttribArrayARB(1);
@@ -1690,6 +1704,19 @@ void EuclidRenderer::setRadius(float* radiusData, int numParticles) {
 
     copy_n(radiusData, numParticles, m_rad);
     m_numParticles = numParticles;
+
+    // Keep the GPU radius attribute synchronized here
+    // full-population and range rendering path can use it
+    glBindBuffer(GL_ARRAY_BUFFER, m_radVBO);
+
+    glBufferData(
+        GL_ARRAY_BUFFER,
+        static_cast<GLsizeiptr>(numParticles * sizeof(float)), 
+        m_rad,
+        GL_DYNAMIC_DRAW
+    );
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 void EuclidRenderer::setPositions(float* pos, int numParticles) {
@@ -1710,6 +1737,59 @@ void EuclidRenderer::setGrid(
     m_gridDim = gridDim;
     m_gridOrigin = worldOrigin;
     m_cellSize = cellSize;
+}
+
+void EuclidRenderer::displayParticleRange(
+    int start,
+    int count,
+    bool emissive) {
+
+    if (start < 0 ||
+        count <= 0 ||
+        start >= m_numParticles || 
+        start + count > m_numParticles) return;
+
+    const GLuint program =
+        emissive
+        ? m_program1
+        : m_program0;
+
+    if (program == 0) return;
+    if (m_vbo == 0 || m_radVBO == 0) return;
+
+    glEnable(GL_POINT_SPRITE_ARB);
+    glTexEnvi(GL_POINT_SPRITE_ARB, GL_COORD_REPLACE_ARB, GL_TRUE);
+    glEnable(GL_VERTEX_PROGRAM_POINT_SIZE_NV);
+
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_TRUE);
+
+    glUseProgram(program);
+
+    const GLint pointScaleLocation =
+        glGetUniformLocation(program, "pointScale");
+
+    if (pointScaleLocation >= 0) {
+        glUniform1f(
+            pointScaleLocation,
+            m_window_h / tanf(m_fov * 0.5f * static_cast<float>(M_PI) / 180.0f)
+        );
+    }
+
+    if (emissive) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+    }
+
+    _drawPointsRange(start, count, true);
+    
+    if (emissive) {
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glDisable(GL_BLEND);
+    }
+
+    glUseProgram(0);
+    glDisable(GL_POINT_SPRITE_ARB);
 }
 
 // =============================================================================

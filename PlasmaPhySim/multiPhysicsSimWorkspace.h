@@ -92,6 +92,17 @@ private:
         Free
     };
 
+    struct ParticleVisual {
+        float renderRadius;
+        float4 color;
+        float emissiveStrength;
+    };
+
+    struct ParticlePhysics {
+        double mass;
+        double charge;
+    };
+
     struct DraftConfig {
 
         // --- Layer 1 --- 
@@ -109,29 +120,53 @@ private:
         unsigned int spawnSelectionIndex = 0;
     };
 
-    struct ParticleVisual {
-        float renderRadius;
-        float4 color;
-        float emissiveStrength;
-    };
+    struct RuntimeConfig {
+        
+        ParticleSpecies particleSpecies = ParticleSpecies::Argon;
 
-    struct ParticlePhysics {
-        double mass;
-        double charge;
-    };
+        unsigned int totalGasCount = 0;
+        unsigned int neutralCount = 0;
+        unsigned int ionCount = 0;
+        unsigned int electronCount = 0;
+        unsigned int activeMarkerCount = 0;
 
+        float ionizationFraction = 0.0f;
+
+        float electronTemperatureEv = 0.0f;
+        float ionTemperatureEv = 0.0f;
+        float neutralTemperatureK = 0.0f;
+
+        unsigned int selectedSpawnSelectionIndex = 0;
+        float selectedSpawnVolumeM3 = 0.0f;
+        
+        float speciesRadius = 0.0f;
+        float placementRadius = 0.0f;
+
+        GridLayout gridLayout = GridLayout::None;
+    };
+    
     WorkspacePresentation buildLayer1Presentation() const;
     WorkspacePresentation buildLayer2Presentation() const;
+    WorkspacePresentation buildLayer3Presentation() const;
+
+    WorkspaceRuntimeStatus buildRuntimeStatus() const;
 
     bool handleLayer1Input(const WorkspaceInputEvent& input, WorkspaceServices& services);
     bool handleLayer2Input(const WorkspaceInputEvent& input, WorkspaceServices& services);
+    bool handleLayer3Input(const WorkspaceInputEvent& input, WorkspaceServices& services);
 
     bool handleLayer2TextEntry(const WorkspaceInputEvent& input);
+
+    bool applyRuntimeConfig();
+    bool resolveRuntimeConfig(RuntimeConfig& resolved) const;
+    bool configureRuntimeVisuals();
 
     unsigned int neutralCount() const;
     unsigned int ionCount() const;
     unsigned int electronCount() const;
     unsigned int requestedMarkerCount() const;
+
+    float selectedSpeciesRenderRadius() const;
 
     void renderConfiguredGrid(WorkspaceServices& services, GridLayout layout) const;
     void renderSelectedSpawnRegion(WorkspaceServices& services) const;
@@ -146,6 +181,9 @@ private:
 
     void refreshLayer1Status();
 
+    void renderRuntimeSpawnRegion(WorkspaceServices& services) const;
+    void renderActivePlasmaMarkers(WorkspaceServices& services);
+
     static std::string spawnSelectionText(unsigned int selectionIndex);
 
     const char* gridLayoutName() const;
@@ -153,8 +191,12 @@ private:
     const char* simSpaceMediumName() const;
     const char* particleSpeciesName() const;
 
-
 private:
+    static constexpr float kElectronRadius = 0.0015f;
+    static constexpr float kHydrogenRadius = 0.0040f;
+    static constexpr float kHeliumRadius = 0.0047f;
+    static constexpr float kArgonRadius = 0.0063f;
+
     static constexpr float kSimBoxSizeM = 4.0f;
     static constexpr float kSimHalfBoxM = kSimBoxSizeM * 0.5f;
     static constexpr float kMaximumSupportedRadius = 0.0156f;
@@ -168,12 +210,16 @@ private:
 
     std::unique_ptr<ParticleSystem> m_particleSystem;
     std::string m_statusLine = "READY: MULTIPHY_SIM MODE ONLINE.";
+
     std::vector<float> m_radii;
-    
+    std::vector<float4> m_colors;
+
     TheArbiter* m_arbiter = nullptr;
     DraftConfig m_draftConfig;
     SpatialVoxelGrid3D m_baseVoxelGrid;
     SpawnDensityRegionGrid3D m_spawnDensityGrid;
+    RuntimeConfig m_runtimeConfig;
+
     TextEntrySession m_textEntry;
 
     Layer1Row m_layer1Selection = Layer1Row::WorkspaceSelection;
@@ -187,6 +233,8 @@ private:
     bool m_active = false;
     bool m_paused = true;
     bool m_runtimeEnabled = false;
+
+    unsigned int m_activeMarkerCount = 0;
 
     float m_elapsedSimulationTime = 0.0f;
 };

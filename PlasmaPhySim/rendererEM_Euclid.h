@@ -199,8 +199,8 @@ public:
 	void drawHighlightedVoxel(
 		const glm::vec3& center,
 		const glm::vec3& halfExtent,
-		float lineWidth = 3.0f
-	) {
+		float lineWidth = 3.0f) {
+
 		const glm::vec3 minimum = center - halfExtent;
 		const glm::vec3 maximum = center + halfExtent;
 
@@ -240,10 +240,22 @@ public:
 		glLineWidth(1.0f);
 	}
 
+	void displayParticleRange(
+		int start, 
+		int count, 
+		bool emissive
+	);
+
 private:
 	void _initGL();
 	void _initialize();
 	void _drawPoints(bool useColorBuffer = true);
+
+	void _drawPointsRange(
+		int start, 
+		int count, 
+		bool useColorBuffer = true
+	);
 
 	GLuint _compileProgram(
 		const char* vsource,

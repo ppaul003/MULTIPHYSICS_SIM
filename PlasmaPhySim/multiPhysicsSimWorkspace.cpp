@@ -31,11 +31,35 @@ namespace {
 
 bool MultiPhysicsSimWorkspace::initialize(WorkspaceServices& services) {
     if (m_initialized) return true;
-    if (!services.arbiter) return false;
+
+    if (!services.renderer || 
+        !services.arbiter) 
+        return false;
 
     m_arbiter = services.arbiter;
-    m_initialized = true;
 
+    m_baseVoxelGrid.dimensions = ivec3(8, 8, 8);
+    m_baseVoxelGrid.origin = vec3(-2.0f, -2.0f, -2.0f);
+    m_baseVoxelGrid.voxelEdgeM = 0.5f;
+
+    m_radii.assign(kParticleCapacity, 0.0f);
+
+    m_colors.assign(
+        kParticleCapacity, 
+        make_float4(1.0f, 1.0f, 1.0f, 1.0f)
+    );
+
+    const uint3 collisionGrid =
+        make_uint3(kGridSize, kGridSize, kGridSize);
+
+    m_particleSystem =
+        make_unique<ParticleSystem>(kParticleCapacity, collisionGrid, true);
+
+    m_particleSystem->setSimulationDomain(kSimBoxSizeM);
+    if (!m_particleSystem->setActiveParticleCount(0))
+        return false;
+
+    m_initialized = true;
     return true;
 }
 
@@ -44,6 +68,10 @@ void MultiPhysicsSimWorkspace::enter(WorkspaceServices& services) {
     if (!m_initialized) return;
 
     m_active = true;
+    m_paused = true;
+    m_runtimeEnabled = false;
+    m_activeMarkerCount = 0;
+    m_elapsedSimulationTime = 0.0f;
 
     refreshLayer1Status();
 }
@@ -51,15 +79,29 @@ void MultiPhysicsSimWorkspace::enter(WorkspaceServices& services) {
 void MultiPhysicsSimWorkspace::exit(WorkspaceServices& services) {
     (void)services;
     m_active = false;
+    m_paused = true;
+    m_runtimeEnabled = false;
+    m_activeMarkerCount = 0;
 }
 
 void MultiPhysicsSimWorkspace::update(
     const WorkspaceFrameContext& frame,
     WorkspaceServices& services) {
 
-    // Reserved workspace: no physics yet.
-    (void)frame;
     (void)services;
+
+    if (!m_active ||
+        !m_arbiter ||
+        !m_particleSystem) return;
+
+    if (m_arbiter->getApplicationLayer() != TheArbiter::ApplicationLayer::ACTIVE_WORKSPACE)
+        return;
+
+    if (!m_runtimeEnabled || m_paused) return;
+
+    m_particleSystem->update(frame.deltaTime);
+
+    m_elapsedSimulationTime += frame.deltaTime;
 }
 
 void MultiPhysicsSimWorkspace::render(
@@ -73,6 +115,7 @@ void MultiPhysicsSimWorkspace::render(
     }
 
     switch (services.arbiter->getApplicationLayer()) {
+
     case TheArbiter::ApplicationLayer::DOMAIN_SELECTION:
         renderConfiguredGrid(services, m_draftConfig.gridLayout);
         return;
@@ -85,11 +128,224 @@ void MultiPhysicsSimWorkspace::render(
         return;
 
     case TheArbiter::ApplicationLayer::ACTIVE_WORKSPACE:
+        renderConfiguredGrid(services, m_runtimeConfig.gridLayout);
+        renderRuntimeSpawnRegion(services);
+        renderActivePlasmaMarkers(services);
+        return;
+
     case TheArbiter::ApplicationLayer::GLOBAL_SHELL:
     default:
         return;
 
     }
+}
+
+void MultiPhysicsSimWorkspace::renderRuntimeSpawnRegion(WorkspaceServices& services) const {
+    if (!services.renderer) return;
+
+    SpawnDensityRegion3D region;
+
+    if (!m_spawnDensityGrid.selection(
+        m_baseVoxelGrid,
+        m_runtimeConfig.selectedSpawnSelectionIndex,
+        region)) return;
+
+    for (const SpatialVoxelRegion& voxel : region.constituentBaseVoxels) {
+
+        services.renderer->drawHighlightedVoxel(
+            voxel.center,
+            voxel.halfExtent,
+            1.0f
+        );
+    }
+}
+
+void MultiPhysicsSimWorkspace::renderActivePlasmaMarkers(WorkspaceServices& services) {
+
+    if (!services.renderer ||
+        !m_particleSystem ||
+        m_activeMarkerCount == 0) return;
+
+    EuclidRenderer& renderer = *services.renderer;
+    renderer.setParticleSystem(m_particleSystem.get());
+
+    renderer.setVertexBuffer(
+        m_particleSystem->getCurrentReadBuffer(),
+        static_cast<int>(m_activeMarkerCount)
+    );
+
+    renderer.setColorBuffer(m_particleSystem->getColorBuffer());
+    renderer.setRadius(m_radii.data(), static_cast<int>(m_activeMarkerCount));
+
+    const int neutralStart = 0;
+    const int ionStart = static_cast<int>(m_runtimeConfig.neutralCount);
+    const int electronStart = ionStart + static_cast<int>(m_runtimeConfig.ionCount);
+
+    // BASE SPHERES
+
+    // Neutral population
+    renderer.displayParticleRange(
+        neutralStart, 
+        static_cast<int>(m_runtimeConfig.neutralCount), 
+        false
+    );
+
+    // Ion base sphere
+    renderer.displayParticleRange(
+        ionStart,
+        static_cast<int>(m_runtimeConfig.ionCount),
+        false
+    );
+
+    // Electron base sphere
+    renderer.displayParticleRange(
+        electronStart,
+        static_cast<int>(m_runtimeConfig.electronCount),
+        false
+    );
+
+    // EMISSIVE OVERLAY
+    renderer.displayParticleRange(
+        ionStart,
+        static_cast<int>(m_runtimeConfig.ionCount),
+        true
+    );
+
+    renderer.displayParticleRange(
+        electronStart,
+        static_cast<int>(m_runtimeConfig.electronCount),
+        true
+    );
+}
+
+bool MultiPhysicsSimWorkspace::resolveRuntimeConfig(RuntimeConfig& resolved) const {
+    if (m_draftConfig.gridLayout == GridLayout::Dynamic)
+        return false;
+
+    if (m_draftConfig.multphysicsMode !=
+        MultiphysicsMode::PlasmaPhy)
+        return false;
+
+    if (m_draftConfig.spawnSelectionIndex >=
+        m_spawnDensityGrid.selectionCount(m_baseVoxelGrid))
+        return false;
+
+    const unsigned int ions = ionCount();
+    const unsigned int neutrals = neutralCount();
+    const unsigned int electrons = electronCount();
+
+    const unsigned long long markerCount =
+        static_cast<unsigned long long>(neutrals) +
+        static_cast<unsigned long long>(ions) +
+        static_cast<unsigned long long>(electrons);
+
+    if (markerCount > kParticleCapacity) return false;
+
+    resolved.particleSpecies = m_draftConfig.particleSpecies;
+    resolved.totalGasCount = m_draftConfig.totalGasDensity;
+
+    resolved.neutralCount = neutrals;
+    resolved.ionCount = ions;
+    resolved.electronCount = electrons;
+
+    resolved.activeMarkerCount =
+        static_cast<unsigned int>(markerCount);
+
+    resolved.ionizationFraction = m_draftConfig.ionizationFraction;
+    resolved.electronTemperatureEv = m_draftConfig.electronTemperature;
+    resolved.ionTemperatureEv = m_draftConfig.ionTemperature;
+    resolved.neutralTemperatureK = m_draftConfig.neutralTemperature;
+    resolved.selectedSpawnSelectionIndex = m_draftConfig.spawnSelectionIndex;
+    
+    resolved.speciesRadius = selectedSpeciesRenderRadius();
+    resolved.placementRadius = std::max(resolved.speciesRadius, kElectronRadius);
+    resolved.gridLayout = m_draftConfig.gridLayout;
+
+    return true;
+}
+
+bool MultiPhysicsSimWorkspace::configureRuntimeVisuals() {
+    if (!m_particleSystem) return false;
+
+    const unsigned int neutralEnd = m_runtimeConfig.neutralCount;
+    const unsigned int ionEnd = neutralEnd + m_runtimeConfig.ionCount;
+    const unsigned int markerEnd = ionEnd + m_runtimeConfig.electronCount;
+
+    m_radii.resize(markerEnd);
+    m_colors.resize(markerEnd);
+
+    const float speciesRadius = m_runtimeConfig.speciesRadius;
+
+    // Neutral
+    for (unsigned int i = 0; i < neutralEnd; i++) {
+
+        m_radii[i] = speciesRadius;
+
+        // Normal Argon/species base color
+        m_colors[i] = make_float4(1.0f, 0.05f, 0.0f, 1.0f);
+    }
+
+    // Ion
+    for (unsigned int i = neutralEnd; i < ionEnd; i++) {
+
+        m_radii[i] = speciesRadius;
+
+        // emissive pass ion
+        m_colors[i] = make_float4(1.0f, 0.20f, 0.02f, 1.0f);
+    }
+
+    // Electron
+    for (unsigned int i = ionEnd; i < markerEnd; i++) {
+
+        m_radii[i] = kElectronRadius;
+        
+        m_colors[i] = make_float4(0.65, 0.20f, 1.00f, 1.0f);
+    }
+
+    if (!m_particleSystem->setActiveRadii(m_radii.data(), markerEnd))
+        return false;
+
+    if (!m_particleSystem->setActiveColors(m_colors.data(), markerEnd))
+        return false;
+
+    return true;
+}
+
+bool MultiPhysicsSimWorkspace::applyRuntimeConfig() {
+    if (!m_particleSystem) return false;
+
+    RuntimeConfig resolved;
+
+    if (!resolveRuntimeConfig(resolved))
+        return false;
+
+    if (!m_particleSystem->setActiveParticleCount(resolved.activeMarkerCount))
+        return false;
+
+    SpawnDensityRegion3D spawnRegion;
+
+    if (!m_spawnDensityGrid.selection(
+        m_baseVoxelGrid,
+        resolved.selectedSpawnSelectionIndex, 
+        spawnRegion))
+        return false;
+
+    if (!m_particleSystem->resetInBounds(
+        ParticleSystem::CNFG_RANDOM_RESTART,
+        make_float3(spawnRegion.minimum.x, spawnRegion.minimum.y, spawnRegion.minimum.z),
+        make_float3(spawnRegion.maximum.x, spawnRegion.maximum.y, spawnRegion.maximum.z),
+        resolved.placementRadius, 
+        kResetSeed)) return false;
+
+    resolved.selectedSpawnVolumeM3 = spawnRegion.volumeM3;
+    m_runtimeConfig = resolved;
+
+    if (!configureRuntimeVisuals())
+        return false;
+    
+    m_activeMarkerCount = resolved.activeMarkerCount;
+
+    return true;
 }
 
 bool MultiPhysicsSimWorkspace::handleInput(
@@ -107,6 +363,8 @@ bool MultiPhysicsSimWorkspace::handleInput(
         return handleLayer2Input(input, services);
 
     case TheArbiter::ApplicationLayer::ACTIVE_WORKSPACE:
+        return handleLayer3Input(input, services);
+
     case TheArbiter::ApplicationLayer::GLOBAL_SHELL:
     default:
         return false;
@@ -214,8 +472,29 @@ bool MultiPhysicsSimWorkspace::handleLayer2Input(
         }
 
         if (m_layer2Selection == Layer2Row::RunSimulation) {
-            m_statusLine = "LAYER 3 SIMULATION RUNTIME unavailable in current pass.";
-            m_statusTone = WorkspaceStatusTone::Warning;
+            
+            m_paused = true;
+            m_runtimeEnabled = false;
+
+            if (applyRuntimeConfig()) {
+
+                m_elapsedSimulationTime = 0.0f;
+
+                m_paused = false;
+                m_runtimeEnabled = true;
+
+                m_statusLine = "STATUS: RUNNING";
+                m_statusTone = WorkspaceStatusTone::Ready;
+
+                services.arbiter->setApplicationLayer(
+                    TheArbiter::ApplicationLayer::ACTIVE_WORKSPACE
+                );
+            }
+            else {
+                m_statusLine = "PLASMA RUNTIME CONFIGURATION INVALID";
+                m_statusTone = WorkspaceStatusTone::Warning;
+            }
+
             return true;
         }
 
@@ -233,6 +512,43 @@ bool MultiPhysicsSimWorkspace::handleLayer2Input(
 
     case WorkspaceInputAction::RawKey:
     case WorkspaceInputAction::None:
+    default:
+        return false;
+    }
+}
+
+bool MultiPhysicsSimWorkspace::handleLayer3Input(
+    const WorkspaceInputEvent& input, 
+    WorkspaceServices& services) {
+
+    switch (input.action) {
+
+    case WorkspaceInputAction::TogglePause:
+
+        if (!m_runtimeEnabled) return true;
+        m_paused = !m_paused;
+
+        m_statusLine =
+            m_paused
+            ? "STATUS: PAUSED"
+            : "STATUS: RUNNING";
+
+        m_statusTone =
+            m_paused
+            ? WorkspaceStatusTone::Neutral
+            : WorkspaceStatusTone::Ready;
+
+        return true;
+
+    case WorkspaceInputAction::Back:
+        
+        m_paused = true;
+        m_runtimeEnabled = false;
+
+        services.arbiter->setApplicationLayer(TheArbiter::ApplicationLayer::WORKSPACE_CONFIGURATION);
+
+        return true;
+
     default:
         return false;
     }
@@ -471,10 +787,54 @@ MultiPhysicsSimWorkspace::buildLayer2Presentation() const {
     return p;
 }
 
+WorkspacePresentation 
+MultiPhysicsSimWorkspace::buildLayer3Presentation() const {
+
+    WorkspacePresentation p;
+    p.panelVisible = false;
+    p.runtimeStatus = buildRuntimeStatus();
+
+    return p;
+}
+
+WorkspaceRuntimeStatus MultiPhysicsSimWorkspace::buildRuntimeStatus() const {
+    
+    WorkspaceRuntimeStatus status;
+    status.visible = true;
+
+    status.titleLine =
+        "LAYER 3 -> SIMULATION RUNTIME "
+        "(MULTIPHYSICS_SIM)";
+
+    status.contextLine =
+        "PLASMA_PHYSICS: "
+        "SPECIES POPULATION RUNTIME";
+
+    const bool running = m_runtimeEnabled && !m_paused;
+
+    status.objectLine = "SIM MARKERS: " +
+        to_string(m_runtimeConfig.activeMarkerCount) + "/" +
+        to_string(kParticleCapacity) + "        STATUS: " +
+        (running
+            ? "RUNNING"
+            : "PAUSED");
+
+    status.objectTone =
+        running
+        ? WorkspaceStatusTone::Ready
+        : WorkspaceStatusTone::Neutral;
+
+    status.helpLine = "SPACE: PAUSE    Q: BACK";
+
+    return status;
+}
+
 WorkspacePresentation MultiPhysicsSimWorkspace::buildPresentation() const {
+
     if (!m_arbiter) return {};
 
     switch (m_arbiter->getApplicationLayer()) {
+
     case TheArbiter::ApplicationLayer::DOMAIN_SELECTION:
         return buildLayer1Presentation();
 
@@ -482,6 +842,8 @@ WorkspacePresentation MultiPhysicsSimWorkspace::buildPresentation() const {
         return buildLayer2Presentation();
 
     case TheArbiter::ApplicationLayer::ACTIVE_WORKSPACE:
+        return buildLayer3Presentation();
+
     case TheArbiter::ApplicationLayer::GLOBAL_SHELL:
     default:
         return {};
@@ -749,6 +1111,22 @@ string MultiPhysicsSimWorkspace::spawnSelectionText(
         << voxelId;
 
     return stream.str();
+}
+
+float MultiPhysicsSimWorkspace::selectedSpeciesRenderRadius() const {
+
+    switch (m_draftConfig.particleSpecies) {
+
+    case ParticleSpecies::Hydrogen:
+        return kHydrogenRadius;
+
+    case ParticleSpecies::Helium:
+        return kHeliumRadius;
+
+    case ParticleSpecies::Argon:
+    default:
+        return kArgonRadius;
+    }
 }
 
 const char* MultiPhysicsSimWorkspace::gridLayoutName() const {

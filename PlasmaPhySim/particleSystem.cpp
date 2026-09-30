@@ -166,6 +166,31 @@ uint ParticleSystem::createVBO(uint size) {
 	return vbo;
 }
 
+
+
+bool ParticleSystem::setActiveColors(const float4* colors, uint count) {
+	if (!m_bInitialized || 
+		!colors || 
+		count != m_activeParticleCount ||
+		m_colorVBO == 0) return false;
+
+	if (count == 0) 
+		return true;
+
+	glBindBuffer(GL_ARRAY_BUFFER, m_colorVBO);
+
+	glBufferSubData(
+		GL_ARRAY_BUFFER, 
+		0,
+		static_cast<GLsizeiptr>(count * sizeof(float4)),
+		colors
+	);
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+	return true;
+}
+
 void ParticleSystem::_initialize(uint numParticles) {
 	assert(!m_bInitialized);
 	
@@ -415,6 +440,57 @@ void ParticleSystem::dumpRadii(float* rad, uint count) {
 	for (uint i = 0; i < count; i++) {
 		rad[i] = m_hVel[i * 4 + 3];
 	}
+}
+
+bool ParticleSystem::setActiveRadii(
+	const float* radii, 
+	uint count) {
+
+	static constexpr float kMaximumSupportedRadius = 0.0156f;
+
+	if (!m_bInitialized || 
+		!radii || 
+		count != m_activeParticleCount)
+		return false;
+
+	if (count == 0) 
+		return true;
+
+	float maximumRadius = 0.0f;
+
+	for (uint i = 0; i < count; i++) {
+		if (!isfinite(radii[i]) ||
+			radii[i] <= 0.0f ||
+			radii[i] > kMaximumSupportedRadius)
+			return false;
+
+		maximumRadius = std::max(maximumRadius, radii[i]);
+	}
+
+	copyArrayFromDevice(
+		m_hVel, 
+		m_dVel, 
+		0, 
+		sizeof(float) * 4 * count
+	);
+
+	for (uint i = 0; i < count; i++)
+		m_hVel[i * 4 + 3] = radii[i];
+
+	// Conservative scalar used by existing
+	// collision/grid code
+	m_params.particleRadius = maximumRadius;
+
+	setParameters(&m_params);
+
+	setArray(
+		VELOCITY, 
+		m_hVel, 
+		0, 
+		static_cast<int>(count)
+	);
+
+	return true;
 }
 
 bool ParticleSystem::setUniformActiveRadii(float radius) {
